@@ -2574,4 +2574,4 @@ declare module NODEEDITOR {
         constructor(props: ITextBlockPropertyGridComponentProps);
         render(): JSX.Element;
     }
-}
+}

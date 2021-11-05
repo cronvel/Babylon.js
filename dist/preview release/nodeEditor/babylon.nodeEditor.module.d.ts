@@ -2571,11 +2571,13 @@ declare module "babylonjs-node-editor/sharedUiComponents/lines/lineContainerComp
 }
 declare module "babylonjs-node-editor/sharedUiComponents/lines/linkButtonComponent" {
     import * as React from "react";
+
     interface ILinkButtonComponentProps {
         label: string;
         buttonLabel: string;
         url?: string;
         onClick: () => void;
+
         onIconClick?: () => void;
     }
     export class LinkButtonComponent extends React.Component<ILinkButtonComponentProps> {
@@ -2586,9 +2588,11 @@ declare module "babylonjs-node-editor/sharedUiComponents/lines/linkButtonCompone
 }
 declare module "babylonjs-node-editor/sharedUiComponents/lines/messageLineComponent" {
     import * as React from "react";
+
     interface IMessageLineComponentProps {
         text: string;
         color?: string;
+
     }
     export class MessageLineComponent extends React.Component<IMessageLineComponentProps> {
         constructor(props: IMessageLineComponentProps);
@@ -3070,6 +3074,7 @@ declare module "babylonjs-node-editor/sharedUiComponents/tabs/propertyGrids/gui/
         render(): JSX.Element;
     }
 }
+
 declare module "babylonjs-node-editor" {
     export * from "babylonjs-node-editor/legacy/legacy";
 }
@@ -5649,4 +5654,4 @@ declare module NODEEDITOR {
         constructor(props: ITextBlockPropertyGridComponentProps);
         render(): JSX.Element;
     }
-}
+}

@@ -1828,4 +1828,4 @@ declare module GUIEDITOR {
         constructor(props: ITextBlockPropertyGridComponentProps);
         render(): JSX.Element;
     }
-}
+}

@@ -15,6 +15,7 @@ export * from "./radioButton";
 export * from "./stackPanel";
 export * from "./selector";
 export * from "./scrollViewers/scrollViewer";
+export * from "./structuredTextBlock";
 export * from "./textBlock";
 export * from "./textWrapper";
 export * from "./toggleButton";

@@ -785,11 +785,11 @@ declare module "babylonjs-gui/2D/controls/control" {
         parent: Nullable<Container>;
         /** @hidden */
         _currentMeasure: Measure;
-        private _fontFamily;
-        private _fontStyle;
-        private _fontWeight;
-        private _fontSize;
-        private _font;
+        protected _fontFamily: string;
+        protected _fontStyle: string;
+        protected _fontWeight: string;
+        protected _fontSize: ValueAndUnit;
+        protected _font: string;
         /** @hidden */
         _width: ValueAndUnit;
         /** @hidden */
@@ -801,7 +801,7 @@ declare module "babylonjs-gui/2D/controls/control" {
             descent: number;
         };
         private _color;
-        private _style;
+        protected _style: Nullable<Style>;
         private _styleObserver;
         /** @hidden */
         protected _horizontalAlignment: number;
@@ -3698,6 +3698,184 @@ declare module "babylonjs-gui/2D/controls/scrollViewers/scrollViewer" {
         dispose(): void;
     }
 }
+declare module "babylonjs-gui/2D/controls/structuredTextBlock" {
+    import { Observable } from "babylonjs/Misc/observable";
+    import { Measure } from "babylonjs-gui/2D/measure";
+    import { Control } from "babylonjs-gui/2D/controls/control";
+    import { TextWrapping } from "babylonjs-gui/2D/controls/textBlock";
+    import { Nullable } from "babylonjs/types";
+    import { ICanvasRenderingContext, ICanvasGradient } from 'babylonjs/Engines/ICanvas';
+    export interface StructuredTextPart {
+        text: string;
+        color?: string | ICanvasGradient;
+        underline?: boolean;
+        lineThrough?: boolean;
+        fontStyle?: string;
+        fontWeight?: string;
+        outlineWidth?: number;
+        outlineColor?: string;
+        shadowColor?: string;
+        shadowBlur?: number;
+        shadowOffsetX?: number;
+        shadowOffsetY?: number;
+        width?: number;
+    }
+    export type StructuredText = Array<StructuredTextPart>;
+    type StructuredTextLine = {
+        parts: StructuredText;
+        width?: number;
+    };
+    type StructuredTextLines = Array<StructuredTextLine>;
+    /**
+     * Class used to create structured text block control
+     */
+    export class StructuredTextBlock extends Control {
+        /**
+         * Defines the name of the control
+         */
+        name?: string | undefined;
+        private _structuredText;
+        private _textWrapping;
+        private _textHorizontalAlignment;
+        private _textVerticalAlignment;
+        private _lines;
+        private _resizeToFit;
+        private _lineSpacing;
+        private _outlineWidth;
+        private _outlineColor;
+        private _underline;
+        private _lineThrough;
+        /**
+         * An event triggered after the text is changed
+         */
+        onTextChangedObservable: Observable<StructuredTextBlock>;
+        /**
+         * An event triggered after the text was broken up into lines
+         */
+        onLinesReadyObservable: Observable<StructuredTextBlock>;
+        /**
+         * Function used to split a string into words. By default, a string is split at each space character found
+         */
+        wordSplittingFunction: Nullable<(line: string) => string[]>;
+        /**
+         * Return the line list (you may need to use the onLinesReadyObservable to make sure the list is ready)
+         */
+        get lines(): any[];
+        /**
+         * Gets or sets an boolean indicating that the StructuredTextBlock will be resized to fit container
+         */
+        get resizeToFit(): boolean;
+        /**
+         * Gets or sets an boolean indicating that the StructuredTextBlock will be resized to fit container
+         */
+        set resizeToFit(value: boolean);
+        /**
+         * Gets or sets a boolean indicating if text must be wrapped
+         */
+        get textWrapping(): TextWrapping | boolean;
+        /**
+         * Gets or sets a boolean indicating if text must be wrapped
+         */
+        set textWrapping(value: TextWrapping | boolean);
+        /**
+         * Gets or sets structured text to display
+         */
+        get structuredText(): StructuredText;
+        /**
+         * Gets or sets structured text to display
+         */
+        set structuredText(value: StructuredText);
+        /**
+         * Gets or sets text horizontal alignment (BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER by default)
+         */
+        get textHorizontalAlignment(): number;
+        /**
+         * Gets or sets text horizontal alignment (BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER by default)
+         */
+        set textHorizontalAlignment(value: number);
+        /**
+         * Gets or sets text vertical alignment (BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER by default)
+         */
+        get textVerticalAlignment(): number;
+        /**
+         * Gets or sets text vertical alignment (BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER by default)
+         */
+        set textVerticalAlignment(value: number);
+        /**
+         * Gets or sets line spacing value
+         */
+        set lineSpacing(value: string | number);
+        /**
+         * Gets or sets line spacing value
+         */
+        get lineSpacing(): string | number;
+        /**
+         * Gets or sets outlineWidth of the text to display
+         */
+        get outlineWidth(): number;
+        /**
+         * Gets or sets outlineWidth of the text to display
+         */
+        set outlineWidth(value: number);
+        /**
+         * Gets or sets a boolean indicating that text must have underline
+         */
+        get underline(): boolean;
+        /**
+         * Gets or sets a boolean indicating that text must have underline
+         */
+        set underline(value: boolean);
+        /**
+         * Gets or sets an boolean indicating that text must be crossed out
+         */
+        get lineThrough(): boolean;
+        /**
+         * Gets or sets an boolean indicating that text must be crossed out
+         */
+        set lineThrough(value: boolean);
+        /**
+         * Gets or sets outlineColor of the text to display
+         */
+        get outlineColor(): string;
+        /**
+         * Gets or sets outlineColor of the text to display
+         */
+        set outlineColor(value: string);
+        /**
+         * Creates a new StructuredTextBlock object
+         * @param name defines the name of the control
+         * @param text defines the text to display (emptry string by default)
+         */
+        constructor(
+        /**
+         * Defines the name of the control
+         */
+        name?: string | undefined, structuredText?: StructuredText);
+        protected _getTypeName(): string;
+        protected _processMeasures(parentMeasure: Measure, context: ICanvasRenderingContext): void;
+        private _drawStructuredText;
+        private _inheritAttributes;
+        private _setContextAttributes;
+        private _setContextAttributesForMeasure;
+        /** @hidden */
+        _draw(context: ICanvasRenderingContext, invalidatedRectangle?: Nullable<Measure>): void;
+        protected _applyStates(context: ICanvasRenderingContext): void;
+        protected _breakLines(refWidth: number, context: ICanvasRenderingContext): StructuredTextLines;
+        protected _parseStructuredTextLine(line: StructuredText, context: ICanvasRenderingContext): StructuredTextLine;
+        protected _parseStructuredTextLineEllipsis(line: StructuredText, width: number, context: ICanvasRenderingContext): StructuredTextLine;
+        protected static _defaultWordSplittingFunction(str: string): Array<string>;
+        protected static _fuseStructuredTextParts(structuredText: StructuredText): StructuredText;
+        protected _structuredTextWidth(structuredText: StructuredText, context: ICanvasRenderingContext): number;
+        protected _parseStructuredTextLineWordWrap(line: StructuredText, width: number, context: ICanvasRenderingContext): StructuredTextLines;
+        protected _renderLines(context: ICanvasRenderingContext): void;
+        /**
+         * Given a width constraint applied on the text block, find the expected height
+         * @returns expected height
+         */
+        computeExpectedHeight(): number;
+        dispose(): void;
+    }
+}
 declare module "babylonjs-gui/2D/controls/toggleButton" {
     import { Observable } from "babylonjs/Misc/observable";
     import { Vector2 } from "babylonjs/Maths/math.vector";
@@ -3915,6 +4093,7 @@ declare module "babylonjs-gui/2D/controls/index" {
     export * from "babylonjs-gui/2D/controls/stackPanel";
     export * from "babylonjs-gui/2D/controls/selector";
     export * from "babylonjs-gui/2D/controls/scrollViewers/scrollViewer";
+    export * from "babylonjs-gui/2D/controls/structuredTextBlock";
     export * from "babylonjs-gui/2D/controls/textBlock";
     export * from "babylonjs-gui/2D/controls/textWrapper";
     export * from "babylonjs-gui/2D/controls/toggleButton";
@@ -7078,6 +7257,7 @@ declare module "babylonjs-gui/3D/materials/fluentMaterial" {
 declare module "babylonjs-gui/legacy/legacy" {
     export * from "babylonjs-gui/index";
 }
+
 declare module "babylonjs-gui" {
     export * from "babylonjs-gui/legacy/legacy";
 }
@@ -7831,11 +8011,11 @@ declare module BABYLON.GUI {
         parent: BABYLON.Nullable<Container>;
         /** @hidden */
         _currentMeasure: Measure;
-        private _fontFamily;
-        private _fontStyle;
-        private _fontWeight;
-        private _fontSize;
-        private _font;
+        protected _fontFamily: string;
+        protected _fontStyle: string;
+        protected _fontWeight: string;
+        protected _fontSize: ValueAndUnit;
+        protected _font: string;
         /** @hidden */
         _width: ValueAndUnit;
         /** @hidden */
@@ -7847,7 +8027,7 @@ declare module BABYLON.GUI {
             descent: number;
         };
         private _color;
-        private _style;
+        protected _style: BABYLON.Nullable<Style>;
         private _styleObserver;
         /** @hidden */
         protected _horizontalAlignment: number;
@@ -10602,6 +10782,178 @@ declare module BABYLON.GUI {
         private _attachWheel;
         _renderHighlightSpecific(context: BABYLON.ICanvasRenderingContext): void;
         /** Releases associated resources */
+        dispose(): void;
+    }
+}
+declare module BABYLON.GUI {
+    export interface StructuredTextPart {
+        text: string;
+        color?: string | BABYLON.ICanvasGradient;
+        underline?: boolean;
+        lineThrough?: boolean;
+        fontStyle?: string;
+        fontWeight?: string;
+        outlineWidth?: number;
+        outlineColor?: string;
+        shadowColor?: string;
+        shadowBlur?: number;
+        shadowOffsetX?: number;
+        shadowOffsetY?: number;
+        width?: number;
+    }
+    export type StructuredText = Array<StructuredTextPart>;
+    type StructuredTextLine = {
+        parts: StructuredText;
+        width?: number;
+    };
+    type StructuredTextLines = Array<StructuredTextLine>;
+    /**
+     * Class used to create structured text block control
+     */
+    export class StructuredTextBlock extends Control {
+        /**
+         * Defines the name of the control
+         */
+        name?: string | undefined;
+        private _structuredText;
+        private _textWrapping;
+        private _textHorizontalAlignment;
+        private _textVerticalAlignment;
+        private _lines;
+        private _resizeToFit;
+        private _lineSpacing;
+        private _outlineWidth;
+        private _outlineColor;
+        private _underline;
+        private _lineThrough;
+        /**
+         * An event triggered after the text is changed
+         */
+        onTextChangedObservable: BABYLON.Observable<StructuredTextBlock>;
+        /**
+         * An event triggered after the text was broken up into lines
+         */
+        onLinesReadyObservable: BABYLON.Observable<StructuredTextBlock>;
+        /**
+         * Function used to split a string into words. By default, a string is split at each space character found
+         */
+        wordSplittingFunction: BABYLON.Nullable<(line: string) => string[]>;
+        /**
+         * Return the line list (you may need to use the onLinesReadyObservable to make sure the list is ready)
+         */
+        get lines(): any[];
+        /**
+         * Gets or sets an boolean indicating that the StructuredTextBlock will be resized to fit container
+         */
+        get resizeToFit(): boolean;
+        /**
+         * Gets or sets an boolean indicating that the StructuredTextBlock will be resized to fit container
+         */
+        set resizeToFit(value: boolean);
+        /**
+         * Gets or sets a boolean indicating if text must be wrapped
+         */
+        get textWrapping(): TextWrapping | boolean;
+        /**
+         * Gets or sets a boolean indicating if text must be wrapped
+         */
+        set textWrapping(value: TextWrapping | boolean);
+        /**
+         * Gets or sets structured text to display
+         */
+        get structuredText(): StructuredText;
+        /**
+         * Gets or sets structured text to display
+         */
+        set structuredText(value: StructuredText);
+        /**
+         * Gets or sets text horizontal alignment (BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER by default)
+         */
+        get textHorizontalAlignment(): number;
+        /**
+         * Gets or sets text horizontal alignment (BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER by default)
+         */
+        set textHorizontalAlignment(value: number);
+        /**
+         * Gets or sets text vertical alignment (BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER by default)
+         */
+        get textVerticalAlignment(): number;
+        /**
+         * Gets or sets text vertical alignment (BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER by default)
+         */
+        set textVerticalAlignment(value: number);
+        /**
+         * Gets or sets line spacing value
+         */
+        set lineSpacing(value: string | number);
+        /**
+         * Gets or sets line spacing value
+         */
+        get lineSpacing(): string | number;
+        /**
+         * Gets or sets outlineWidth of the text to display
+         */
+        get outlineWidth(): number;
+        /**
+         * Gets or sets outlineWidth of the text to display
+         */
+        set outlineWidth(value: number);
+        /**
+         * Gets or sets a boolean indicating that text must have underline
+         */
+        get underline(): boolean;
+        /**
+         * Gets or sets a boolean indicating that text must have underline
+         */
+        set underline(value: boolean);
+        /**
+         * Gets or sets an boolean indicating that text must be crossed out
+         */
+        get lineThrough(): boolean;
+        /**
+         * Gets or sets an boolean indicating that text must be crossed out
+         */
+        set lineThrough(value: boolean);
+        /**
+         * Gets or sets outlineColor of the text to display
+         */
+        get outlineColor(): string;
+        /**
+         * Gets or sets outlineColor of the text to display
+         */
+        set outlineColor(value: string);
+        /**
+         * Creates a new StructuredTextBlock object
+         * @param name defines the name of the control
+         * @param text defines the text to display (emptry string by default)
+         */
+        constructor(
+        /**
+         * Defines the name of the control
+         */
+        name?: string | undefined, structuredText?: StructuredText);
+        protected _getTypeName(): string;
+        protected _processMeasures(parentMeasure: Measure, context: BABYLON.ICanvasRenderingContext): void;
+        private _drawStructuredText;
+        private _inheritAttributes;
+        private _setContextAttributes;
+        private _setContextAttributesForMeasure;
+        /** @hidden */
+        _draw(context: BABYLON.ICanvasRenderingContext, invalidatedRectangle?: BABYLON.Nullable<Measure>): void;
+        protected _applyStates(context: BABYLON.ICanvasRenderingContext): void;
+        protected _breakLines(refWidth: number, context: BABYLON.ICanvasRenderingContext): StructuredTextLines;
+        protected _parseStructuredTextLine(line: StructuredText, context: BABYLON.ICanvasRenderingContext): StructuredTextLine;
+        protected _parseStructuredTextLineEllipsis(line: StructuredText, width: number, context: BABYLON.ICanvasRenderingContext): StructuredTextLine;
+        protected static _defaultWordSplittingFunction(str: string): Array<string>;
+        protected static _fuseStructuredTextParts(structuredText: StructuredText): StructuredText;
+        protected _structuredTextWidth(structuredText: StructuredText, context: BABYLON.ICanvasRenderingContext): number;
+        protected _parseStructuredTextLineWordWrap(line: StructuredText, width: number, context: BABYLON.ICanvasRenderingContext): StructuredTextLines;
+        protected _renderLines(context: BABYLON.ICanvasRenderingContext): void;
+        /**
+         * Given a width constraint applied on the text block, find the expected height
+         * @returns expected height
+         */
+        computeExpectedHeight(): number;
         dispose(): void;
     }
 }
@@ -13619,4 +13971,4 @@ declare module BABYLON.GUI {
      * This is here for backwards compatibility with 4.2
      */
     // export { FluentMaterial } from "babylonjs-gui/3D/materials/fluent/fluentMaterial";
-}
+}
