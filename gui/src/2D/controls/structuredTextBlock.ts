@@ -345,12 +345,13 @@ export class StructuredTextBlock extends Control {
 
         if (this._resizeToFit) {
             if (this._textWrapping === TextWrapping.Clip) {
-                let newWidth = (this.paddingLeftInPixels + this.paddingRightInPixels + maxLineWidth) | 0;
+                const newWidth = (this.paddingLeftInPixels + this.paddingRightInPixels + maxLineWidth) | 0;
                 if (newWidth !== this._width.internalValue) {
                     this._width.updateInPlace(newWidth, ValueAndUnit.UNITMODE_PIXEL);
                     this._rebuildLayout = true;
                 }
             }
+
             let newHeight = (this.paddingTopInPixels + this.paddingBottomInPixels + this._fontOffset.height * this._lines.length) | 0;
 
             if (this._lines.length > 0 && this._lineSpacing.internalValue !== 0) {
@@ -372,9 +373,8 @@ export class StructuredTextBlock extends Control {
     }
 
     private _drawStructuredText(structuredText: StructuredText, textWidth: number, y: number, context: ICanvasRenderingContext): void {
-        var attr ,
-            x = 0 ,
-            width = this._currentMeasure.width ;
+        let x = 0;
+        let width = this._currentMeasure.width;
 
         switch (this._textHorizontalAlignment) {
             case Control.HORIZONTAL_ALIGNMENT_LEFT:
@@ -388,41 +388,41 @@ export class StructuredTextBlock extends Control {
                 break;
         }
 
-        //console.warn( "****************** ._drawStructuredText()" , structuredText , textWidth , y ) ;
+        //console.warn( "****************** ._drawStructuredText()" , structuredText , textWidth , y );
 
-        var halfThickness = Math.round(this.fontSizeInPixels * 0.025) ,
-            underlineYOffset = 3 ,
-            lineThroughYOffset = - this.fontSizeInPixels / 3 ;
+        const halfThickness = Math.round(this.fontSizeInPixels * 0.025);
+        const underlineYOffset = 3 ;
+        const lineThroughYOffset = - this.fontSizeInPixels / 3;
 
         for (let part of structuredText) {
-            if (! part.width) { continue ; }
+            if (! part.width) { continue; }
 
-            attr = this._inheritAttributes(part) ;
-            this._setContextAttributes(context , attr) ;
+            const attr = this._inheritAttributes(part);
+            this._setContextAttributes(context , attr);
 
             if (attr.outlineWidth) {
                 if (attr.underline) {
-                    context.strokeRect(this._currentMeasure.left + x - halfThickness , y + underlineYOffset - halfThickness , part.width , 2 * halfThickness) ;
+                    context.strokeRect(this._currentMeasure.left + x - halfThickness , y + underlineYOffset - halfThickness , part.width , 2 * halfThickness);
                 }
 
-                context.strokeText(part.text , this._currentMeasure.left + x , y) ;
+                context.strokeText(part.text , this._currentMeasure.left + x , y);
 
                 if (attr.lineThrough) {
-                    context.strokeRect(this._currentMeasure.left + x - halfThickness , y + lineThroughYOffset - halfThickness , part.width , 2 * halfThickness) ;
+                    context.strokeRect(this._currentMeasure.left + x - halfThickness , y + lineThroughYOffset - halfThickness , part.width , 2 * halfThickness);
                 }
             }
 
             if (attr.underline) {
-                context.fillRect(this._currentMeasure.left + x - halfThickness , y + underlineYOffset - halfThickness , part.width , 2 * halfThickness) ;
+                context.fillRect(this._currentMeasure.left + x - halfThickness , y + underlineYOffset - halfThickness , part.width , 2 * halfThickness);
             }
 
-            context.fillText(part.text , this._currentMeasure.left + x , y) ;
+            context.fillText(part.text , this._currentMeasure.left + x , y);
 
             if (attr.lineThrough) {
-                context.fillRect(this._currentMeasure.left + x - halfThickness , y + lineThroughYOffset - halfThickness , part.width , 2 * halfThickness) ;
+                context.fillRect(this._currentMeasure.left + x - halfThickness , y + lineThroughYOffset - halfThickness , part.width , 2 * halfThickness);
             }
 
-            x += part.width ;
+            x += part.width;
         }
     }
 
@@ -442,37 +442,37 @@ export class StructuredTextBlock extends Control {
             // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
             fontStyle: part.fontStyle ?? this._style?.fontStyle ?? this._fontStyle ,
             fontWeight: part.fontWeight ?? this._style?.fontWeight ?? this._fontWeight ,
-        } ;
+        };
     }
 
     // It's like ._applyStates(), but for each line parts
     private _setContextAttributes(context: ICanvasRenderingContext, attr: TextPartAttributes) {
         // .fillStyle and .strokeStyle can receive a CSS color string, a CanvasGradient or a CanvasPattern,
         // but here we just care about color string.
-        context.fillStyle = attr.color ;
+        context.fillStyle = attr.color;
 
         // Disallow changing font size and family? If this would be allowed, line-height computing would need to be upgraded...
-        context.font = attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily ;
+        context.font = attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily;
         //console.warn( "************?????????????????" , attr , attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily ) ;
 
         if (attr.shadowBlur || attr.shadowOffsetX || attr.shadowOffsetY) {
-            if (attr.shadowColor) { context.shadowColor = attr.shadowColor ; }
-            context.shadowBlur = attr.shadowBlur ;
-            context.shadowOffsetX = attr.shadowOffsetX ;
-            context.shadowOffsetY = attr.shadowOffsetY ;
+            if (attr.shadowColor) { context.shadowColor = attr.shadowColor; }
+            context.shadowBlur = attr.shadowBlur;
+            context.shadowOffsetX = attr.shadowOffsetX;
+            context.shadowOffsetY = attr.shadowOffsetY;
         }
         else {
-            context.shadowBlur = 0 ;
+            context.shadowBlur = 0;
         }
 
         if (attr.outlineWidth) {
-            context.lineWidth = attr.outlineWidth ;
-            context.strokeStyle = attr.outlineColor ;
-            context.lineJoin = 'miter' ;
-            context.miterLimit = 2 ;
+            context.lineWidth = attr.outlineWidth;
+            context.strokeStyle = attr.outlineColor;
+            context.lineJoin = 'miter';
+            context.miterLimit = 2;
         }
         else {
-            context.lineWidth = 0 ;
+            context.lineWidth = 0;
         }
     }
 
@@ -504,25 +504,25 @@ export class StructuredTextBlock extends Control {
     }
 
     protected _breakLines(refWidth: number, context: ICanvasRenderingContext): StructuredTextLines {
-        var _newPart ,
-            lines: StructuredTextLines = [] ,
-            _currentLine: StructuredText = [] ,
-            _lines: Array<StructuredText> = [ _currentLine ];
+        let _newPart;
+        const lines: StructuredTextLines = [];
+        let _currentLine: StructuredText = [];
+        const _lines: Array<StructuredText> = [ _currentLine ];
 
         for (let _part of this._structuredText) {
             if (_part.text.includes('\n')) {
                 for (let _splitted of _part.text.split('\n')) {
-                    _newPart = Object.assign({} , _part) ;
-                    _newPart.text = _splitted ;
-                    _currentLine.push(_newPart) ;
+                    _newPart = Object.assign({} , _part);
+                    _newPart.text = _splitted;
+                    _currentLine.push(_newPart);
 
                     // Create a new line
                     _currentLine = [] ;
-                    _lines.push(_currentLine) ;
+                    _lines.push(_currentLine);
                 }
             }
             else {
-                _currentLine.push(_part) ;
+                _currentLine.push(_part);
             }
         }
 
@@ -546,56 +546,55 @@ export class StructuredTextBlock extends Control {
     }
 
     protected _parseStructuredTextLine(line: StructuredText, context: ICanvasRenderingContext): StructuredTextLine {
-        var lineWidth = this._structuredTextWidth(line , context) ;
-        return { parts: line, width: lineWidth } ;
+        const lineWidth = this._structuredTextWidth(line , context);
+        return { parts: line, width: lineWidth };
     }
 
     protected _parseStructuredTextLineEllipsis(line: StructuredText, width: number , context: ICanvasRenderingContext): StructuredTextLine {
-        var _part , characters ,
-            lineWidth = this._structuredTextWidth(line , context) ;
+        let lineWidth = this._structuredTextWidth(line , context);
 
         while (line.length && lineWidth > width) {
-            _part = line[ line.length - 1 ] ;
-            characters = Array.from(_part.text) ;
+            const _part = line[ line.length - 1 ];
+            const characters = Array.from(_part.text);
 
             while (characters.length && lineWidth > width) {
                 characters.pop() ;
 
-                _part.text = characters.join('') + "…" ;
-                delete _part.width ;    // delete .width, so ._structuredTextWidth() will re-compute it instead of using the existing one
-                lineWidth = this._structuredTextWidth(line , context) ;
+                _part.text = characters.join('') + "…";
+                delete _part.width;    // delete .width, so ._structuredTextWidth() will re-compute it instead of using the existing one
+                lineWidth = this._structuredTextWidth(line , context);
             }
 
             if (lineWidth > width) {
-                line.pop() ;
+                line.pop();
             }
         }
 
-        return { parts: line, width: lineWidth } ;
+        return { parts: line, width: lineWidth };
     }
 
     // This splitting function does not exlude the splitter, it keeps it on the right-side of the split.
     protected static _defaultWordSplittingFunction(str: string): Array<string> {
-        var match ,
-            lastIndex = 0 ,
-            splitted = [] ,
-            regexp = / +/g ;
+        let match;
+        let lastIndex = 0;
+        const splitted = [];
+        const regexp = / +/g;
 
         //str = str.trim() ;
 
         while (match = regexp.exec(str)) {
             if (lastIndex < match.index) {
-                splitted.push(str.slice(lastIndex , match.index)) ;
+                splitted.push(str.slice(lastIndex , match.index));
             }
 
-            lastIndex = match.index ;
+            lastIndex = match.index;
         }
 
         if (lastIndex < str.length) {
-            splitted.push(str.slice(lastIndex)) ;
+            splitted.push(str.slice(lastIndex));
         }
 
-        return splitted ;
+        return splitted;
     }
 
     // Join consecutive parts sharing the exact same attributes.
@@ -603,13 +602,13 @@ export class StructuredTextBlock extends Control {
     protected static _fuseStructuredTextParts(structuredText: StructuredText): StructuredText {
         if (structuredText.length <= 1) { return structuredText ; }
 
-        var index , part ,
-            last: StructuredTextPart = structuredText[ 0 ] ,
-            lastInserted: StructuredTextPart = last ,
-            output: StructuredText = [ last ] ;
+        let last: StructuredTextPart = structuredText[ 0 ];
+        let lastInserted: StructuredTextPart = last;
+        const output: StructuredText = [ last ];
 
-        for (index = 1 ; index < structuredText.length ; index ++) {
-            part = structuredText[ index ] ;
+        for (let index = 1 ; index < structuredText.length ; index ++) {
+            const part = structuredText[ index ];
+
             if (
                 last.color === part.color
                 && last.outlineWidth === part.outlineWidth && last.outlineColor === part.outlineColor
@@ -619,96 +618,94 @@ export class StructuredTextBlock extends Control {
                 && last.lineThrough === part.lineThrough
                 && last.fontStyle === part.fontStyle && last.fontWeight === part.fontWeight
             ) {
-                lastInserted.text += part.text ;
-                lastInserted.width = (lastInserted.width || 0) + (part.width || 0) ;   // It's never undefined here, but it's needed to please tsc
+                lastInserted.text += part.text;
+                lastInserted.width = (lastInserted.width || 0) + (part.width || 0);   // It's never undefined here, but it's needed to please tsc
             }
             else {
-                output.push(part) ;
-                lastInserted = part ;
+                output.push(part);
+                lastInserted = part;
             }
 
-            last = part ;
+            last = part;
         }
 
-        return output ;
+        return output;
     }
 
     // Set the width of each parts and return the total width
     protected _structuredTextWidth(structuredText: StructuredText, context: ICanvasRenderingContext): number {
-        var contextSaved = false ;
+        let contextSaved = false;
 
-        var _width = structuredText.reduce((width , part) => {
+        let _width = structuredText.reduce((width , part) => {
             if (part.width === undefined) {
                 if (! contextSaved) { context.save() ; }
 
-                let attr = this._inheritAttributes(part) ;
-                this._setContextAttributesForMeasure(context , attr) ;
+                const attr = this._inheritAttributes(part);
+                this._setContextAttributesForMeasure(context , attr);
 
-                let textMetrics = context.measureText(part.text) ;
+                const textMetrics = context.measureText(part.text);
 
                 // .actualBoundingBox* does not work: sometime it skips spaces
-                part.width = textMetrics.width ;
+                part.width = textMetrics.width;
                 //part.width = Math.abs( textMetrics.actualBoundingBoxLeft ) + Math.abs( textMetrics.actualBoundingBoxRight ) ;
                 //part.width = Math.abs( textMetrics.actualBoundingBoxRight - textMetrics.actualBoundingBoxLeft ) ;
                 //console.warn( "******************* ._structuredTextWidth() " , part , textMetrics ) ;
             }
 
-            return width + part.width ;
-        } , 0) ;
+            return width + part.width;
+        } , 0);
 
-        if (contextSaved) { context.restore() ; }
+        if (contextSaved) { context.restore(); }
 
-        return _width ;
+        return _width;
     }
 
     protected _parseStructuredTextLineWordWrap(line: StructuredText, width: number, context: ICanvasRenderingContext): StructuredTextLines {
-        var _part: StructuredTextPart ,
-            _word: StructuredTextPart ,
-            wordText: string ,
-            lines: StructuredTextLines = [] ,
-            words: StructuredText = [] ,
-            wordSplittingFunction = this.wordSplittingFunction || StructuredTextBlock._defaultWordSplittingFunction ;
+        const lines: StructuredTextLines = [];
+        const words: StructuredText = [];
+        const wordSplittingFunction = this.wordSplittingFunction || StructuredTextBlock._defaultWordSplittingFunction;
 
         // Split each part of the line
-        for (_part of line) {
-            for (wordText of wordSplittingFunction(_part.text)) {
-                _word = Object.assign({} , _part) ;
-                _word.text = wordText ;
-                words.push(_word) ;
+        for (let _part of line) {
+            for (let wordText of wordSplittingFunction(_part.text)) {
+                let _word: StructuredTextPart = Object.assign({} , _part);
+                _word.text = wordText;
+                words.push(_word);
             }
         }
 
-        var lastTestWidth = 0 ,
-            testWidth = 0 ,
-            testLine: StructuredText = [] ;
+        let lastTestWidth = 0;
+        let testWidth = 0;
+        let testLine: StructuredText = [];
 
-        for (_word of words) {
-            testLine.push(_word) ;
-            lastTestWidth = testWidth ;
-            testWidth = this._structuredTextWidth(testLine , context) ;
+        for (let _word of words) {
+            testLine.push(_word);
+            lastTestWidth = testWidth;
+            testWidth = this._structuredTextWidth(testLine , context);
 
             if (testWidth > width && testLine.length > 1) {
-                testLine.pop() ;
+                testLine.pop();
                 //lines.push( { parts: testLine , width: lastTestWidth } ) ;
-                lines.push({ parts: StructuredTextBlock._fuseStructuredTextParts(testLine) , width: lastTestWidth }) ;
+                lines.push({ parts: StructuredTextBlock._fuseStructuredTextParts(testLine) , width: lastTestWidth });
 
                 // Create a new line with the current word as the first word.
                 // We have to left-trim it because it mays contain a space.
-                _word.text = _word.text.trimStart() ;
-                delete _word.width ;    // delete .width, so ._structuredTextWidth() will re-compute it instead of using the existing one
-                testLine = [ _word ] ;
-                testWidth = this._structuredTextWidth(testLine , context) ;
+                _word.text = _word.text.trimStart();
+                delete _word.width;    // delete .width, so ._structuredTextWidth() will re-compute it instead of using the existing one
+                testLine = [ _word ];
+                testWidth = this._structuredTextWidth(testLine , context);
             }
         }
 
-        lines.push({ parts: StructuredTextBlock._fuseStructuredTextParts(testLine) , width: testWidth }) ;
+        lines.push({ parts: StructuredTextBlock._fuseStructuredTextParts(testLine) , width: testWidth });
 
-        return lines ;
+        return lines;
     }
 
     protected _renderLines(context: ICanvasRenderingContext): void {
-        var height = this._currentMeasure.height;
-        var rootY = 0;
+        const height = this._currentMeasure.height;
+        let rootY = 0;
+
         switch (this._textVerticalAlignment) {
             case Control.VERTICAL_ALIGNMENT_TOP:
                 rootY = this._fontOffset.ascent;
