@@ -73,6 +73,7 @@ export class StructuredTextBlock extends Control {
     private _textWrapping = TextWrapping.Clip;
     private _textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
     private _textVerticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    private _visibleCharCount: number = Infinity;
 
     private _lines: any[];
     private _resizeToFit: boolean = false;
@@ -302,6 +303,25 @@ export class StructuredTextBlock extends Control {
     }
 
     /**
+     * Gets or sets visibleCharCount of the text to display
+     */
+    @serialize()
+    public get visibleCharCount(): number {
+        return this._visibleCharCount;
+    }
+
+    /**
+     * Gets or sets visibleCharCount of the text to display
+     */
+    public set visibleCharCount(value: number) {
+        if (this._visibleCharCount === value) {
+            return;
+        }
+        this._visibleCharCount = value;
+        this._markAsDirty();
+    }
+
+    /**
      * Creates a new StructuredTextBlock object
      * @param name defines the name of the control
      * @param text defines the text to display (emptry string by default)
@@ -369,60 +389,6 @@ export class StructuredTextBlock extends Control {
                 this._height.updateInPlace(newHeight, ValueAndUnit.UNITMODE_PIXEL);
                 this._rebuildLayout = true;
             }
-        }
-    }
-
-    private _drawStructuredText(structuredText: StructuredText, textWidth: number, y: number, context: ICanvasRenderingContext): void {
-        let x = 0;
-        let width = this._currentMeasure.width;
-
-        switch (this._textHorizontalAlignment) {
-            case Control.HORIZONTAL_ALIGNMENT_LEFT:
-                x = 0;
-                break;
-            case Control.HORIZONTAL_ALIGNMENT_RIGHT:
-                x = width - textWidth;
-                break;
-            case Control.HORIZONTAL_ALIGNMENT_CENTER:
-                x = (width - textWidth) / 2;
-                break;
-        }
-
-        //console.warn( "****************** ._drawStructuredText()" , structuredText , textWidth , y );
-
-        const halfThickness = Math.round(this.fontSizeInPixels * 0.025);
-        const underlineYOffset = 3 ;
-        const lineThroughYOffset = - this.fontSizeInPixels / 3;
-
-        for (let part of structuredText) {
-            if (! part.width) { continue; }
-
-            const attr = this._inheritAttributes(part);
-            this._setContextAttributes(context , attr);
-
-            if (attr.outlineWidth) {
-                if (attr.underline) {
-                    context.strokeRect(this._currentMeasure.left + x - halfThickness , y + underlineYOffset - halfThickness , part.width , 2 * halfThickness);
-                }
-
-                context.strokeText(part.text , this._currentMeasure.left + x , y);
-
-                if (attr.lineThrough) {
-                    context.strokeRect(this._currentMeasure.left + x - halfThickness , y + lineThroughYOffset - halfThickness , part.width , 2 * halfThickness);
-                }
-            }
-
-            if (attr.underline) {
-                context.fillRect(this._currentMeasure.left + x - halfThickness , y + underlineYOffset - halfThickness , part.width , 2 * halfThickness);
-            }
-
-            context.fillText(part.text , this._currentMeasure.left + x , y);
-
-            if (attr.lineThrough) {
-                context.fillRect(this._currentMeasure.left + x - halfThickness , y + lineThroughYOffset - halfThickness , part.width , 2 * halfThickness);
-            }
-
-            x += part.width;
         }
     }
 
@@ -719,6 +685,9 @@ export class StructuredTextBlock extends Control {
         }
 
         rootY += this._currentMeasure.top;
+        let charCount = 0;
+        const width = this._currentMeasure.width;
+
 
         for (let i = 0; i < this._lines.length; i++) {
             const line = this._lines[i];
@@ -731,8 +700,68 @@ export class StructuredTextBlock extends Control {
                 }
             }
 
-            this._drawStructuredText(line.parts, line.width, rootY, context);
+            let x = 0;
+
+            switch (this._textHorizontalAlignment) {
+                case Control.HORIZONTAL_ALIGNMENT_LEFT:
+                    x = 0;
+                    break;
+                case Control.HORIZONTAL_ALIGNMENT_RIGHT:
+                    x = width - line.width;
+                    break;
+                case Control.HORIZONTAL_ALIGNMENT_CENTER:
+                    x = (width - line.width) / 2;
+                    break;
+            }
+
+            for (let part of line.parts) {
+                const partWidth = part.width || 0;
+                if (charCount >= this._visibleCharCount) { return; }
+
+                const attr = this._inheritAttributes(part);
+                this._setContextAttributes(context , attr);
+
+                if (charCount + part.text.length <= this._visibleCharCount) {
+                    this._drawText(part.text, attr, x, rootY, partWidth, context);
+                }
+                else {
+                    this._drawText(part.text.slice(0, this._visibleCharCount - charCount), attr, x, rootY, partWidth, context);
+                }
+
+                x += partWidth;
+                charCount += part.text.length;
+            }
+
             rootY += this._fontOffset.height;
+        }
+    }
+
+    protected _drawText(text: string, attr: TextPartAttributes, x: number, y: number, width: number, context: ICanvasRenderingContext): void {
+        //TODO: Should be moved outside of this function, e.g. in the constructor
+        const halfThickness = Math.round(this.fontSizeInPixels * 0.025);
+        const underlineYOffset = 3;
+        const lineThroughYOffset = - this.fontSizeInPixels / 3;
+
+        if (attr.outlineWidth) {
+            if (attr.underline) {
+                context.strokeRect(this._currentMeasure.left + x - halfThickness , y + underlineYOffset - halfThickness , width , 2 * halfThickness);
+            }
+
+            context.strokeText(text , this._currentMeasure.left + x , y);
+
+            if (attr.lineThrough) {
+                context.strokeRect(this._currentMeasure.left + x - halfThickness , y + lineThroughYOffset - halfThickness , width , 2 * halfThickness);
+            }
+        }
+
+        if (attr.underline) {
+            context.fillRect(this._currentMeasure.left + x - halfThickness , y + underlineYOffset - halfThickness , width , 2 * halfThickness);
+        }
+
+        context.fillText(text , this._currentMeasure.left + x , y);
+
+        if (attr.lineThrough) {
+            context.fillRect(this._currentMeasure.left + x - halfThickness , y + lineThroughYOffset - halfThickness , width , 2 * halfThickness);
         }
     }
 
