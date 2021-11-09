@@ -10,58 +10,58 @@ import { ICanvasRenderingContext , ICanvasGradient } from 'babylonjs/Engines/ICa
 import { Engine } from 'babylonjs/Engines/engine';
 
 export interface StructuredTextPart {
-  text: string;
+    text: string;
 
-  color?: string | ICanvasGradient;
+    color?: string | ICanvasGradient;
 
-  underline?: boolean;
-  lineThrough?: boolean;
+    underline?: boolean;
+    lineThrough?: boolean;
 
-  // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
-  fontStyle?: string;
-  fontWeight?: string;
+    // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
+    fontStyle?: string;
+    fontWeight?: string;
 
-  outlineWidth?: number;
-  outlineColor?: string;
+    outlineWidth?: number;
+    outlineColor?: string;
 
-  shadowColor?: string;
-  shadowBlur?: number;
-  shadowOffsetX?: number;
-  shadowOffsetY?: number;
+    shadowColor?: string;
+    shadowBlur?: number;
+    shadowOffsetX?: number;
+    shadowOffsetY?: number;
 
-  // Computed part width
-  width?: number;
+    // Computed part width
+    width?: number;
 }
 
 export type StructuredText = Array<StructuredTextPart>;
 
 type StructuredTextLine = {
-  parts: StructuredText;
+    parts: StructuredText;
 
-  // Computed line width
-  width?: number;
+    // Computed line width
+    width?: number;
 };
 type StructuredTextLines = Array<StructuredTextLine>;
 
 // Mostly the same than StructuredTextPart, but nothing is optional here,
 // this is the attributes about to be sent to the canvas context.
 interface TextPartAttributes {
-  color: string | ICanvasGradient;
+    color: string | ICanvasGradient;
 
-  underline: boolean;
-  lineThrough: boolean;
+    underline: boolean;
+    lineThrough: boolean;
 
-  // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
-  fontStyle: string;
-  fontWeight: string;
+    // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
+    fontStyle: string;
+    fontWeight: string;
 
-  outlineWidth: number;
-  outlineColor: string;
+    outlineWidth: number;
+    outlineColor: string;
 
-  shadowColor: string;
-  shadowBlur: number;
-  shadowOffsetX: number;
-  shadowOffsetY: number;
+    shadowColor: string;
+    shadowBlur: number;
+    shadowOffsetX: number;
+    shadowOffsetY: number;
 }
 
 /**
@@ -73,7 +73,6 @@ export class StructuredTextBlock extends Control {
     private _textWrapping = TextWrapping.Clip;
     private _textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
     private _textVerticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
-    private _characterLimit: number = Infinity;
 
     private _lines: any[];
     private _resizeToFit: boolean = false;
@@ -82,6 +81,13 @@ export class StructuredTextBlock extends Control {
     private _outlineColor: string = "white";
     private _underline: boolean = false;
     private _lineThrough: boolean = false;
+
+    // Useful for various optimization (e.g. avoiding parsing lines when it shouldn't)
+    private _characterCount: number = 0;
+    private _characterLimit: number = Infinity;
+    private _lastWidth: number = 0;
+    private _linesAreDirty: boolean = true;
+
     /**
      * An event triggered after the text is changed
      */
@@ -96,6 +102,10 @@ export class StructuredTextBlock extends Control {
      * Function used to split a string into words. By default, a string is split at each space character found
      */
     public wordSplittingFunction: Nullable<(line: string) => string[]>;
+
+    public _markLinesAsDirty() {
+        this._linesAreDirty = true;
+    }
 
     /**
      * Return the line list (you may need to use the onLinesReadyObservable to make sure the list is ready)
@@ -126,6 +136,7 @@ export class StructuredTextBlock extends Control {
             this._height.ignoreAdaptiveScaling = true;
         }
 
+        //this._markLinesAsDirty();
         this._markAsDirty();
     }
 
@@ -145,6 +156,7 @@ export class StructuredTextBlock extends Control {
             return;
         }
         this._textWrapping = +value;
+        this._markLinesAsDirty();
         this._markAsDirty();
     }
 
@@ -164,6 +176,7 @@ export class StructuredTextBlock extends Control {
             return;
         }
         this._structuredText = value ;
+        this._markLinesAsDirty();
         this._markAsDirty();
         this.onTextChangedObservable.notifyObservers(this);
     }
@@ -317,8 +330,21 @@ export class StructuredTextBlock extends Control {
         if (this._characterLimit === value) {
             return;
         }
+        if (this._characterLimit >= this._characterCount && value >= this._characterCount) {
+            // This will have no effect, however since the .structuredText getter may be triggered later,
+            // it's is still useful to update the value.
+            this._characterLimit = value;
+            return;
+        }
         this._characterLimit = value;
         this._markAsDirty();
+    }
+
+    /**
+     * Gets the character count of the current structuredText
+     */
+    public get characterCount(): number {
+        return this._characterCount;
     }
 
     /**
@@ -342,6 +368,105 @@ export class StructuredTextBlock extends Control {
         return "StructuredTextBlock";
     }
 
+    protected _applyStates(context: ICanvasRenderingContext): void {
+        super._applyStates(context);
+        if (this.outlineWidth) {
+            context.lineWidth = this.outlineWidth;
+            context.strokeStyle = this.outlineColor;
+            context.lineJoin = 'miter';
+            context.miterLimit = 2;
+        }
+    }
+
+    // It's like ._applyStates(), but for each line parts
+    private _setContextAttributes(context: ICanvasRenderingContext, attr: TextPartAttributes) {
+        // .fillStyle and .strokeStyle can receive a CSS color string, a CanvasGradient or a CanvasPattern,
+        // but here we just care about color string.
+        context.fillStyle = attr.color;
+
+        // Disallow changing font size and family? If this would be allowed, line-height computing would need to be upgraded...
+        context.font = attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily;
+        //console.warn( "************?????????????????" , attr , attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily ) ;
+
+        if (attr.shadowBlur || attr.shadowOffsetX || attr.shadowOffsetY) {
+            if (attr.shadowColor) { context.shadowColor = attr.shadowColor; }
+            context.shadowBlur = attr.shadowBlur;
+            context.shadowOffsetX = attr.shadowOffsetX;
+            context.shadowOffsetY = attr.shadowOffsetY;
+        }
+        else {
+            context.shadowBlur = 0;
+        }
+
+        if (attr.outlineWidth) {
+            context.lineWidth = attr.outlineWidth;
+            context.strokeStyle = attr.outlineColor;
+            context.lineJoin = 'miter';
+            context.miterLimit = 2;
+        }
+        else {
+            context.lineWidth = 0;
+        }
+    }
+
+    // Like ._setContextAttributesForMeasure(), but only set up attributes that cares for measuring the text
+    private _setContextAttributesForMeasure(context: ICanvasRenderingContext, attr: TextPartAttributes) {
+        context.font = attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily ;
+    }
+
+    // Compute an attribute object from a text's part, inheriting from this
+    private _inheritAttributes(part: StructuredTextPart): TextPartAttributes {
+        return {
+            color: part.color ?? this.color ,
+            outlineWidth: part.outlineWidth ?? this._outlineWidth ,
+            outlineColor: part.outlineColor ?? this._outlineColor ,
+            shadowColor: part.shadowColor ?? this.shadowColor ,
+            shadowBlur: part.shadowBlur ?? this.shadowBlur ,
+            shadowOffsetX: part.shadowOffsetX ?? this.shadowOffsetX ,
+            shadowOffsetY: part.shadowOffsetY ?? this.shadowOffsetY ,
+            underline: part.underline ?? this._underline ,
+            lineThrough: part.lineThrough ?? this._lineThrough ,
+
+            // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
+            fontStyle: part.fontStyle ?? this._style?.fontStyle ?? this._fontStyle ,
+            fontWeight: part.fontWeight ?? this._style?.fontWeight ?? this._fontWeight ,
+        };
+    }
+
+    /**
+     * Given a width constraint applied on the text block, find the expected height
+     * @returns expected height
+     */
+    public computeExpectedHeight(): number {
+        if (this._structuredText.length && this.widthInPixels) {
+            // Shoudl abstract platform instead of using LastCreatedEngine
+            const context = Engine.LastCreatedEngine?.createCanvas(0, 0).getContext("2d");
+            if (context) {
+                this._applyStates(context);
+                if (!this._fontOffset) {
+                    this._fontOffset = Control._GetFontOffset(context.font);
+                }
+                const lines = this._lines ? this._lines : this._breakLines(this.widthInPixels - this.paddingLeftInPixels - this.paddingRightInPixels, context);
+
+                let newHeight = this.paddingTopInPixels + this.paddingBottomInPixels + this._fontOffset.height * lines.length;
+
+                if (lines.length > 0 && this._lineSpacing.internalValue !== 0) {
+                    let lineSpacing = 0;
+                    if (this._lineSpacing.isPixel) {
+                        lineSpacing = this._lineSpacing.getValue(this._host);
+                    } else {
+                        lineSpacing = this._lineSpacing.getValue(this._host) * this._height.getValueInPixel(this._host, this._cachedParentMeasure.height);
+                    }
+
+                    newHeight += (lines.length - 1) * lineSpacing;
+                }
+
+                return newHeight;
+            }
+        }
+        return 0;
+    }
+
     protected _processMeasures(parentMeasure: Measure, context: ICanvasRenderingContext): void {
         if (!this._fontOffset) {
             this._fontOffset = Control._GetFontOffset(context.font);
@@ -350,8 +475,12 @@ export class StructuredTextBlock extends Control {
         super._processMeasures(parentMeasure, context);
 
         // Prepare lines
-        this._lines = this._breakLines(this._currentMeasure.width, context);
-        this.onLinesReadyObservable.notifyObservers(this);
+        if (this._linesAreDirty || this._lastWidth !== this._currentMeasure.width) {
+            this._lines = this._breakLines(this._currentMeasure.width, context);
+            this.onLinesReadyObservable.notifyObservers(this);
+            this._lastWidth = this._currentMeasure.width;
+            this._linesAreDirty = false;
+        }
 
         let maxLineWidth: number = 0;
 
@@ -392,90 +521,15 @@ export class StructuredTextBlock extends Control {
         }
     }
 
-    // Compute an attribute object from a text's part, inheriting from this
-    private _inheritAttributes(part: StructuredTextPart): TextPartAttributes {
-        return {
-            color: part.color ?? this.color ,
-            outlineWidth: part.outlineWidth ?? this._outlineWidth ,
-            outlineColor: part.outlineColor ?? this._outlineColor ,
-            shadowColor: part.shadowColor ?? this.shadowColor ,
-            shadowBlur: part.shadowBlur ?? this.shadowBlur ,
-            shadowOffsetX: part.shadowOffsetX ?? this.shadowOffsetX ,
-            shadowOffsetY: part.shadowOffsetY ?? this.shadowOffsetY ,
-            underline: part.underline ?? this._underline ,
-            lineThrough: part.lineThrough ?? this._lineThrough ,
-
-            // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
-            fontStyle: part.fontStyle ?? this._style?.fontStyle ?? this._fontStyle ,
-            fontWeight: part.fontWeight ?? this._style?.fontWeight ?? this._fontWeight ,
-        };
-    }
-
-    // It's like ._applyStates(), but for each line parts
-    private _setContextAttributes(context: ICanvasRenderingContext, attr: TextPartAttributes) {
-        // .fillStyle and .strokeStyle can receive a CSS color string, a CanvasGradient or a CanvasPattern,
-        // but here we just care about color string.
-        context.fillStyle = attr.color;
-
-        // Disallow changing font size and family? If this would be allowed, line-height computing would need to be upgraded...
-        context.font = attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily;
-        //console.warn( "************?????????????????" , attr , attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily ) ;
-
-        if (attr.shadowBlur || attr.shadowOffsetX || attr.shadowOffsetY) {
-            if (attr.shadowColor) { context.shadowColor = attr.shadowColor; }
-            context.shadowBlur = attr.shadowBlur;
-            context.shadowOffsetX = attr.shadowOffsetX;
-            context.shadowOffsetY = attr.shadowOffsetY;
-        }
-        else {
-            context.shadowBlur = 0;
-        }
-
-        if (attr.outlineWidth) {
-            context.lineWidth = attr.outlineWidth;
-            context.strokeStyle = attr.outlineColor;
-            context.lineJoin = 'miter';
-            context.miterLimit = 2;
-        }
-        else {
-            context.lineWidth = 0;
-        }
-    }
-
-    // Like ._setContextAttributesForMeasure(), but only set up attributes that cares for measuring text
-    private _setContextAttributesForMeasure(context: ICanvasRenderingContext, attr: TextPartAttributes) {
-        context.font = attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily ;
-    }
-
-    /** @hidden */
-    public _draw(context: ICanvasRenderingContext, invalidatedRectangle?: Nullable<Measure>): void {
-        context.save();
-
-        this._applyStates(context);
-
-        // Render lines
-        this._renderLines(context);
-
-        context.restore();
-    }
-
-    protected _applyStates(context: ICanvasRenderingContext): void {
-        super._applyStates(context);
-        if (this.outlineWidth) {
-            context.lineWidth = this.outlineWidth;
-            context.strokeStyle = this.outlineColor;
-            context.lineJoin = 'miter';
-            context.miterLimit = 2;
-        }
-    }
-
     protected _breakLines(refWidth: number, context: ICanvasRenderingContext): StructuredTextLines {
         let _newPart;
         const lines: StructuredTextLines = [];
         let _currentLine: StructuredText = [];
         const _lines: Array<StructuredText> = [ _currentLine ];
+        this._characterCount = 0;
 
         for (let _part of this._structuredText) {
+            this._characterCount += _part.text.length;
             if (_part.text.includes('\n')) {
                 for (let _splitted of _part.text.split('\n')) {
                     _newPart = Object.assign({} , _part);
@@ -668,6 +722,15 @@ export class StructuredTextBlock extends Control {
         return lines;
     }
 
+    /** @hidden */
+    public _draw(context: ICanvasRenderingContext, invalidatedRectangle?: Nullable<Measure>): void {
+        context.save();
+        this._applyStates(context);
+        // Render lines
+        this._renderLines(context);
+        context.restore();
+    }
+
     protected _renderLines(context: ICanvasRenderingContext): void {
         const height = this._currentMeasure.height;
         let rootY = 0;
@@ -770,43 +833,8 @@ export class StructuredTextBlock extends Control {
         }
     }
 
-    /**
-     * Given a width constraint applied on the text block, find the expected height
-     * @returns expected height
-     */
-    public computeExpectedHeight(): number {
-        if (this._structuredText.length && this.widthInPixels) {
-            // Shoudl abstract platform instead of using LastCreatedEngine
-            const context = Engine.LastCreatedEngine?.createCanvas(0, 0).getContext("2d");
-            if (context) {
-                this._applyStates(context);
-                if (!this._fontOffset) {
-                    this._fontOffset = Control._GetFontOffset(context.font);
-                }
-                const lines = this._lines ? this._lines : this._breakLines(this.widthInPixels - this.paddingLeftInPixels - this.paddingRightInPixels, context);
-
-                let newHeight = this.paddingTopInPixels + this.paddingBottomInPixels + this._fontOffset.height * lines.length;
-
-                if (lines.length > 0 && this._lineSpacing.internalValue !== 0) {
-                    let lineSpacing = 0;
-                    if (this._lineSpacing.isPixel) {
-                        lineSpacing = this._lineSpacing.getValue(this._host);
-                    } else {
-                        lineSpacing = this._lineSpacing.getValue(this._host) * this._height.getValueInPixel(this._host, this._cachedParentMeasure.height);
-                    }
-
-                    newHeight += (lines.length - 1) * lineSpacing;
-                }
-
-                return newHeight;
-            }
-        }
-        return 0;
-    }
-
     dispose(): void {
         super.dispose();
-
         this.onTextChangedObservable.clear();
     }
 }
