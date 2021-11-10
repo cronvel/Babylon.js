@@ -7,33 +7,10 @@ import { RegisterClass } from "babylonjs/Misc/typeStore";
 import { Nullable } from "babylonjs/types";
 import { serialize } from 'babylonjs/Misc/decorators';
 import { ICanvasRenderingContext , ICanvasGradient } from 'babylonjs/Engines/ICanvas';
+import { IStructuredTextPart } from './iStructuredTextPart';
 import { Engine } from 'babylonjs/Engines/engine';
 
-export interface StructuredTextPart {
-    text: string;
-
-    color?: string | ICanvasGradient;
-
-    underline?: boolean;
-    lineThrough?: boolean;
-
-    // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
-    fontStyle?: string;
-    fontWeight?: string;
-
-    outlineWidth?: number;
-    outlineColor?: string;
-
-    shadowColor?: string;
-    shadowBlur?: number;
-    shadowOffsetX?: number;
-    shadowOffsetY?: number;
-
-    // Computed part width
-    width?: number;
-}
-
-export type StructuredText = Array<StructuredTextPart>;
+type StructuredText = Array<IStructuredTextPart>;
 
 type StructuredTextLine = {
     parts: StructuredText;
@@ -43,7 +20,7 @@ type StructuredTextLine = {
 };
 type StructuredTextLines = Array<StructuredTextLine>;
 
-// Mostly the same than StructuredTextPart, but nothing is optional here,
+// Mostly the same than IStructuredTextPart, but nothing is optional here,
 // this is the attributes about to be sent to the canvas context.
 interface TextPartAttributes {
     color: string | ICanvasGradient;
@@ -415,7 +392,7 @@ export class StructuredTextBlock extends Control {
     }
 
     // Compute an attribute object from a text's part, inheriting from this
-    private _inheritAttributes(part: StructuredTextPart): TextPartAttributes {
+    private _inheritAttributes(part: IStructuredTextPart): TextPartAttributes {
         return {
             color: part.color ?? this.color ,
             outlineWidth: part.outlineWidth ?? this._outlineWidth ,
@@ -622,8 +599,8 @@ export class StructuredTextBlock extends Control {
     protected static _fuseStructuredTextParts(structuredText: StructuredText): StructuredText {
         if (structuredText.length <= 1) { return structuredText ; }
 
-        let last: StructuredTextPart = structuredText[ 0 ];
-        let lastInserted: StructuredTextPart = last;
+        let last: IStructuredTextPart = structuredText[ 0 ];
+        let lastInserted: IStructuredTextPart = last;
         const output: StructuredText = [ last ];
 
         for (let index = 1 ; index < structuredText.length ; index ++) {
@@ -688,7 +665,7 @@ export class StructuredTextBlock extends Control {
         // Split each part of the line
         for (let _part of line) {
             for (let wordText of wordSplittingFunction(_part.text)) {
-                let _word: StructuredTextPart = Object.assign({} , _part);
+                let _word: IStructuredTextPart = Object.assign({} , _part);
                 _word.text = wordText;
                 words.push(_word);
             }
