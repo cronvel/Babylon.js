@@ -788,7 +788,7 @@ export class StructuredTextBlock extends Control {
     protected _drawText(text: string, attr: TextPartAttributes, x: number, y: number, width: number, height: number, context: ICanvasRenderingContext): void {
         // Later, those constants would depend on attribute (e.g.: if/when variable font-size is supported)
         const halfThickness = Math.round(this.fontSizeInPixels * 0.025);
-        const underlineYOffset = 3;
+        const underlineYOffset = Math.round(this.fontSizeInPixels * 0.2);
         const lineThroughYOffset = - Math.round(this.fontSizeInPixels / 3);
 
         if (! width && (attr.underline || attr.lineThrough || attr.frame) ) {
@@ -797,7 +797,8 @@ export class StructuredTextBlock extends Control {
         }
 
         if (attr.frame) {
-            this._drawFrame(attr, x - halfThickness, y - height + Math.round(this.fontSizeInPixels / 3), width + halfThickness, height, context);
+            //const extraWidth = Math.round(this.fontSizeInPixels * 0.05);
+            this._drawFrame(attr, x - halfThickness, y - height + Math.round(this.fontSizeInPixels / 3), width + 2 * halfThickness, height, context);
         }
 
         this._setContextAttributes(context, attr);
