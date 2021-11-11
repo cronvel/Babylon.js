@@ -28,6 +28,10 @@ interface TextPartAttributes {
     underline: boolean;
     lineThrough: boolean;
 
+    frame: boolean;
+    frameColor: string;
+    frameCornerRadius: number;
+
     // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
     fontStyle: string;
     fontWeight: string;
@@ -58,6 +62,8 @@ export class StructuredTextBlock extends Control {
     private _outlineColor: string = "white";
     private _underline: boolean = false;
     private _lineThrough: boolean = false;
+    private _frameColor: string = "#707070";
+    private _frameCornerRadius: number = 0;
 
     // Useful for various optimization (e.g. avoiding parsing lines when it shouldn't)
     private _characterCount: number = 0;
@@ -403,6 +409,9 @@ export class StructuredTextBlock extends Control {
             shadowOffsetY: part.shadowOffsetY ?? this.shadowOffsetY ,
             underline: part.underline ?? this._underline ,
             lineThrough: part.lineThrough ?? this._lineThrough ,
+            frame: !! part.frame ,
+            frameColor: part.frameColor ?? this._frameColor,
+            frameCornerRadius: part.frameCornerRadius ?? this._frameCornerRadius,
 
             // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
             fontStyle: part.fontStyle ?? this._style?.fontStyle ?? this._fontStyle ,
@@ -727,17 +736,13 @@ export class StructuredTextBlock extends Control {
         rootY += this._currentMeasure.top;
         let charCount = 0;
         const width = this._currentMeasure.width;
-
+        const lineHeight = this._lineSpacing.isPixel ? this._lineSpacing.getValue(this._host) : this._lineSpacing.getValue(this._host) * this._height.getValueInPixel(this._host, this._cachedParentMeasure.height);
 
         for (let i = 0; i < this._lines.length; i++) {
             const line = this._lines[i];
 
             if (i !== 0 && this._lineSpacing.internalValue !== 0) {
-                if (this._lineSpacing.isPixel) {
-                    rootY += this._lineSpacing.getValue(this._host);
-                } else {
-                    rootY = rootY + this._lineSpacing.getValue(this._host) * this._height.getValueInPixel(this._host, this._cachedParentMeasure.height);
-                }
+                rootY += lineHeight;
             }
 
             let x = 0;
@@ -761,10 +766,10 @@ export class StructuredTextBlock extends Control {
                 const attr = this._inheritAttributes(part);
 
                 if (charCount + part.text.length <= this._characterLimit) {
-                    this._drawText(part.text, attr, x, rootY, partWidth, context);
+                    this._drawText(part.text, attr, x, rootY, partWidth, lineHeight, context);
                 }
                 else {
-                    this._drawText(part.text.slice(0, this._characterLimit - charCount), attr, x, rootY, 0 , context);
+                    this._drawText(part.text.slice(0, this._characterLimit - charCount), attr, x, rootY, 0 , lineHeight, context);
                 }
 
                 x += partWidth;
@@ -775,11 +780,15 @@ export class StructuredTextBlock extends Control {
         }
     }
 
-    protected _drawText(text: string, attr: TextPartAttributes, x: number, y: number, decorationWidth: number, context: ICanvasRenderingContext): void {
+    protected _drawText(text: string, attr: TextPartAttributes, x: number, y: number, decorationWidth: number, decorationHeight: number, context: ICanvasRenderingContext): void {
         // Later, those constants would depend on attribute (e.g.: if/when variable font-size is supported)
         const halfThickness = Math.round(this.fontSizeInPixels * 0.025);
         const underlineYOffset = 3;
         const lineThroughYOffset = - this.fontSizeInPixels / 3;
+
+        if (attr.frame) {
+            this._drawFrame(attr, x, y, decorationWidth, decorationHeight, context);
+        }
 
         this._setContextAttributes(context , attr);
 
@@ -808,6 +817,22 @@ export class StructuredTextBlock extends Control {
         if (attr.lineThrough) {
             context.fillRect(this._currentMeasure.left + x - halfThickness , y + lineThroughYOffset - halfThickness , decorationWidth , 2 * halfThickness);
         }
+    }
+
+    private _drawFrame(attr: TextPartAttributes, x: number, y: number, width: number, height: number, context: ICanvasRenderingContext): void {
+        context.fillStyle = context.strokeStyle = attr.frameColor;
+
+        context.beginPath();
+        context.moveTo(x + attr.frameCornerRadius, y);
+        context.lineTo(x + width - attr.frameCornerRadius, y);
+        context.quadraticCurveTo(x + width, y, x + width, y + attr.frameCornerRadius);
+        context.lineTo(x + width, y + height - attr.frameCornerRadius);
+        context.quadraticCurveTo(x + width, y + height, x + width - attr.frameCornerRadius, y + height);
+        context.lineTo(x + attr.frameCornerRadius, y + height);
+        context.quadraticCurveTo(x, y + height, x, y + height - attr.frameCornerRadius);
+        context.lineTo(x, y + attr.frameCornerRadius);
+        context.quadraticCurveTo(x, y, x + attr.frameCornerRadius, y);
+        context.closePath();
     }
 
     dispose(): void {

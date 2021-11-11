@@ -8,6 +8,10 @@ export interface IStructuredTextPart {
     underline?: boolean;
     lineThrough?: boolean;
 
+    frame?: boolean;
+    frameColor?: string;
+    frameCornerRadius?: number;
+
     // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
     fontStyle?: string;
     fontWeight?: string;
