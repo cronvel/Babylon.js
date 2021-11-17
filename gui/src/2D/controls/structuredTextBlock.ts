@@ -56,9 +56,9 @@ export class StructuredTextBlock extends Control {
     private _textWrapping = TextWrapping.Clip;
     private _textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
     private _textVerticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
-
     private _lines: any[];
     private _resizeToFit: boolean = false;
+
     private _lineSpacing: ValueAndUnit = new ValueAndUnit(0);
     private _outlineWidth: number = 0;
     private _outlineColor: string = "white";
@@ -69,10 +69,14 @@ export class StructuredTextBlock extends Control {
     private _frameOutlineColor: string = "#606060";
     private _frameCornerRadius: number = 0;
 
+    private _underlineRelativeY: number = 0.15;
+    private _lineThroughRelativeY: number = -0.3;
+    private _decorationRelativeThickness: number = 0.08;
+
     // Useful for various optimization (e.g. avoiding parsing lines when it shouldn't)
     private _characterCount: number = 0;
     private _characterLimit: number = Infinity;
-    private _lastWidth: number = 0;
+    private _lastMeasuredWidth: number = 0;
     private _linesAreDirty: boolean = true;
 
     /**
@@ -90,41 +94,25 @@ export class StructuredTextBlock extends Control {
      */
     public wordSplittingFunction: Nullable<(line: string) => string[]>;
 
-    public _markLinesAsDirty() {
-        this._linesAreDirty = true;
-    }
-
     /**
-     * Return the line list (you may need to use the onLinesReadyObservable to make sure the list is ready)
-     */
-    public get lines(): any[] {
-        return this._lines;
-    }
-
-    /**
-     * Gets or sets an boolean indicating that the StructuredTextBlock will be resized to fit container
-     */
+    * Gets or sets structured text to display
+    */
     @serialize()
-    public get resizeToFit(): boolean {
-        return this._resizeToFit;
+    public get structuredText(): StructuredText {
+        return this._structuredText;
     }
 
     /**
-     * Gets or sets an boolean indicating that the StructuredTextBlock will be resized to fit container
-     */
-    public set resizeToFit(value: boolean) {
-        if (this._resizeToFit === value) {
+    * Gets or sets structured text to display
+    */
+    public set structuredText(value: StructuredText) {
+        if (this._structuredText === value || ! Array.isArray(value)) {
             return;
         }
-        this._resizeToFit = value;
-
-        if (this._resizeToFit) {
-            this._width.ignoreAdaptiveScaling = true;
-            this._height.ignoreAdaptiveScaling = true;
-        }
-
-        //this._markLinesAsDirty();
+        this._structuredText = value ;
+        this._markLinesAsDirty();
         this._markAsDirty();
+        this.onTextChangedObservable.notifyObservers(this);
     }
 
     /**
@@ -145,27 +133,6 @@ export class StructuredTextBlock extends Control {
         this._textWrapping = +value;
         this._markLinesAsDirty();
         this._markAsDirty();
-    }
-
-    /**
-     * Gets or sets structured text to display
-     */
-    @serialize()
-    public get structuredText(): StructuredText {
-        return this._structuredText;
-    }
-
-    /**
-     * Gets or sets structured text to display
-     */
-    public set structuredText(value: StructuredText) {
-        if (this._structuredText === value || ! Array.isArray(value)) {
-            return;
-        }
-        this._structuredText = value ;
-        this._markLinesAsDirty();
-        this._markAsDirty();
-        this.onTextChangedObservable.notifyObservers(this);
     }
 
     /**
@@ -209,6 +176,43 @@ export class StructuredTextBlock extends Control {
     }
 
     /**
+    * Return the line list (you may need to use the onLinesReadyObservable to make sure the list is ready)
+    */
+    public get lines(): any[] {
+        return this._lines;
+    }
+
+    /**
+    * Gets or sets an boolean indicating that the StructuredTextBlock will be resized to fit container
+    */
+    @serialize()
+    public get resizeToFit(): boolean {
+        return this._resizeToFit;
+    }
+
+    /**
+    * Gets or sets an boolean indicating that the StructuredTextBlock will be resized to fit container
+    */
+    public set resizeToFit(value: boolean) {
+        if (this._resizeToFit === value) {
+            return;
+        }
+        this._resizeToFit = value;
+
+        if (this._resizeToFit) {
+            this._width.ignoreAdaptiveScaling = true;
+            this._height.ignoreAdaptiveScaling = true;
+        }
+
+        //this._markLinesAsDirty();
+        this._markAsDirty();
+    }
+
+    protected _markLinesAsDirty() {
+        this._linesAreDirty = true;
+    }
+
+    /**
      * Gets or sets line spacing value
      */
     @serialize()
@@ -245,10 +249,28 @@ export class StructuredTextBlock extends Control {
     }
 
     /**
+    * Gets or sets outlineColor of the text to display
+    */
+    @serialize()
+    public get outlineColor(): string {
+        return this._outlineColor;
+    }
+
+    /**
+    * Gets or sets outlineColor of the text to display
+    */
+    public set outlineColor(value: string) {
+        if (this._outlineColor === value) {
+            return;
+        }
+        this._outlineColor = value;
+        this._markAsDirty();
+    }
+
+    /**
      * Gets or sets a boolean indicating that text must have underline
      */
     @serialize()
-
     public get underline(): boolean {
         return this._underline;
     }
@@ -284,22 +306,143 @@ export class StructuredTextBlock extends Control {
     }
 
     /**
-     * Gets or sets outlineColor of the text to display
-     */
+    * Gets or sets frameColor of the text to display
+    */
     @serialize()
-    public get outlineColor(): string {
-        return this._outlineColor;
+    public get frameColor(): string {
+        return this._frameColor;
     }
 
     /**
-     * Gets or sets outlineColor of the text to display
-     */
-    public set outlineColor(value: string) {
-        if (this._outlineColor === value) {
+    * Gets or sets frameColor of the text to display
+    */
+    public set frameColor(value: string) {
+        if (this._frameColor === value) {
             return;
         }
-        this._outlineColor = value;
+        this._frameColor = value;
         this._markAsDirty();
+    }
+
+    /**
+     * Gets or sets frameOutlineWidth of the text to display
+     */
+    @serialize()
+    public get frameOutlineWidth(): number {
+        return this._frameOutlineWidth;
+    }
+
+    /**
+     * Gets or sets frameOutlineWidth of the text to display
+     */
+    public set frameOutlineWidth(value: number) {
+        if (this._frameOutlineWidth === value) {
+            return;
+        }
+        this._frameOutlineWidth = value;
+        this._markAsDirty();
+    }
+
+    /**
+    * Gets or sets frameOutlineColor of the text to display
+    */
+    @serialize()
+    public get frameOutlineColor(): string {
+        return this._frameOutlineColor;
+    }
+
+    /**
+    * Gets or sets frameOutlineColor of the text to display
+    */
+    public set frameOutlineColor(value: string) {
+        if (this._frameOutlineColor === value) {
+            return;
+        }
+        this._frameOutlineColor = value;
+        this._markAsDirty();
+    }
+
+    /**
+     * Gets or sets frameCornerRadius of the text to display
+     */
+    @serialize()
+    public get frameCornerRadius(): number {
+        return this._frameCornerRadius;
+    }
+
+    /**
+     * Gets or sets frameCornerRadius of the text to display
+     */
+    public set frameCornerRadius(value: number) {
+        if (this._frameCornerRadius === value) {
+            return;
+        }
+        this._frameCornerRadius = value;
+        this._markAsDirty();
+    }
+
+    /**
+     * Gets or sets underlineRelativeY of the text to display
+     */
+    @serialize()
+    public get underlineRelativeY(): number {
+        return this._underlineRelativeY;
+    }
+
+    /**
+     * Gets or sets underlineRelativeY of the text to display
+     */
+    public set underlineRelativeY(value: number) {
+        if (this._underlineRelativeY === value) {
+            return;
+        }
+        this._underlineRelativeY = value;
+        this._markAsDirty();
+    }
+
+    /**
+     * Gets or sets lineThroughRelativeY of the text to display
+     */
+    @serialize()
+    public get lineThroughRelativeY(): number {
+        return this._lineThroughRelativeY;
+    }
+
+    /**
+     * Gets or sets lineThroughRelativeY of the text to display
+     */
+    public set lineThroughRelativeY(value: number) {
+        if (this._lineThroughRelativeY === value) {
+            return;
+        }
+        this._lineThroughRelativeY = value;
+        this._markAsDirty();
+    }
+
+    /**
+     * Gets or sets decorationRelativeThickness of the text to display, affect both underline and lineThrough thcikness
+     */
+    @serialize()
+    public get decorationRelativeThickness(): number {
+        return this._decorationRelativeThickness;
+    }
+
+    /**
+     * Gets or sets decorationRelativeThickness of the text to display, affect both underline and lineThrough thcikness
+     */
+    public set decorationRelativeThickness(value: number) {
+        if (this._decorationRelativeThickness === value) {
+            return;
+        }
+        this._decorationRelativeThickness = value;
+        this._markAsDirty();
+    }
+
+    /**
+    * Gets the character count of the current structuredText
+    */
+    public get characterCount(): number {
+        return this._characterCount;
     }
 
     /**
@@ -325,13 +468,6 @@ export class StructuredTextBlock extends Control {
         }
         this._characterLimit = value;
         this._markAsDirty();
-    }
-
-    /**
-     * Gets the character count of the current structuredText
-     */
-    public get characterCount(): number {
-        return this._characterCount;
     }
 
     /**
@@ -467,10 +603,10 @@ export class StructuredTextBlock extends Control {
         super._processMeasures(parentMeasure, context);
 
         // Prepare lines
-        if (this._linesAreDirty || this._lastWidth !== this._currentMeasure.width) {
+        if (this._linesAreDirty || this._lastMeasuredWidth !== this._currentMeasure.width) {
             this._lines = this._breakLines(this._currentMeasure.width, context);
             this.onLinesReadyObservable.notifyObservers(this);
-            this._lastWidth = this._currentMeasure.width;
+            this._lastMeasuredWidth = this._currentMeasure.width;
             this._linesAreDirty = false;
         }
 
@@ -657,11 +793,10 @@ export class StructuredTextBlock extends Control {
 
                 const textMetrics = context.measureText(part.text);
 
-                // .actualBoundingBox* does not work: sometime it skips spaces
+                // .actualBoundingBox* does not work: sometime it skips spaces, also it's not widely supported
                 part.width = textMetrics.width;
                 //part.width = Math.abs( textMetrics.actualBoundingBoxLeft ) + Math.abs( textMetrics.actualBoundingBoxRight ) ;
                 //part.width = Math.abs( textMetrics.actualBoundingBoxRight - textMetrics.actualBoundingBoxLeft ) ;
-                //console.warn( "******************* ._structuredTextWidth() " , part , textMetrics ) ;
             }
 
             return width + part.width;
@@ -786,10 +921,10 @@ export class StructuredTextBlock extends Control {
     }
 
     protected _drawText(text: string, attr: TextPartAttributes, x: number, y: number, width: number, height: number, context: ICanvasRenderingContext): void {
-        // Later, those constants would depend on attribute (e.g.: if/when variable font-size is supported)
-        const halfThickness = Math.round(this.fontSizeInPixels * 0.025);
-        const underlineYOffset = Math.round(this.fontSizeInPixels * 0.2);
-        const lineThroughYOffset = - Math.round(this.fontSizeInPixels / 3);
+        //const halfThickness = this.fontSizeInPixels * this._decorationRelativeThickness / 2;
+        const thickness = this.fontSizeInPixels * this._decorationRelativeThickness;
+        const underlineYOffset = this.fontSizeInPixels * this._underlineRelativeY;
+        const lineThroughYOffset = this.fontSizeInPixels * this._lineThroughRelativeY;
 
         if (! width && (attr.underline || attr.lineThrough || attr.frame) ) {
             this._setContextAttributesForMeasure(context, attr);
@@ -798,31 +933,31 @@ export class StructuredTextBlock extends Control {
 
         if (attr.frame) {
             //const extraWidth = Math.round(this.fontSizeInPixels * 0.05);
-            this._drawFrame(attr, x - halfThickness, y - height + Math.round(this.fontSizeInPixels / 3), width + 2 * halfThickness, height, context);
+            this._drawFrame(attr, x - thickness, y - height + Math.round(this.fontSizeInPixels / 3), width + 2 * thickness, height, context);
         }
 
         this._setContextAttributes(context, attr);
 
         if (attr.outlineWidth) {
             if (attr.underline) {
-                context.strokeRect(x - halfThickness, y + underlineYOffset - halfThickness, width, 2 * halfThickness);
+                context.strokeRect(x - thickness, y + underlineYOffset, width, thickness);
             }
 
             context.strokeText(text, x, y);
 
             if (attr.lineThrough) {
-                context.strokeRect(x - halfThickness, y + lineThroughYOffset - halfThickness, width, 2 * halfThickness);
+                context.strokeRect(x - thickness, y + lineThroughYOffset, width, thickness);
             }
         }
 
         if (attr.underline) {
-            context.fillRect(x - halfThickness, y + underlineYOffset - halfThickness, width, 2 * halfThickness);
+            context.fillRect(x - thickness, y + underlineYOffset, width, thickness);
         }
 
         context.fillText(text, x, y);
 
         if (attr.lineThrough) {
-            context.fillRect(x - halfThickness, y + lineThroughYOffset - halfThickness, width, 2 * halfThickness);
+            context.fillRect(x - thickness, y + lineThroughYOffset, width, thickness);
         }
     }
 
