@@ -509,7 +509,6 @@ export class StructuredTextBlock extends Control {
 
         // Disallow changing font size and family? If this would be allowed, line-height computing would need to be upgraded...
         context.font = attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily;
-        //console.warn( "************?????????????????" , attr , attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily ) ;
 
         if (attr.shadowBlur || attr.shadowOffsetX || attr.shadowOffsetY) {
             if (attr.shadowColor) { context.shadowColor = attr.shadowColor; }
