@@ -64,8 +64,8 @@ export class StructuredTextBlock extends Control {
     private _outlineColor: string = "white";
     private _underline: boolean = false;
     private _lineThrough: boolean = false;
-    private _frameColor: string = "#909090";
-    private _frameOutlineWidth: number = 0;
+    private _frameColor: string = "#a0a0a0";
+    private _frameOutlineWidth: number = 2;
     private _frameOutlineColor: string = "#606060";
     private _frameCornerRadius: number = 0;
 
@@ -921,10 +921,10 @@ export class StructuredTextBlock extends Control {
     }
 
     protected _drawText(text: string, attr: TextPartAttributes, x: number, y: number, width: number, height: number, context: ICanvasRenderingContext): void {
-        //const halfThickness = this.fontSizeInPixels * this._decorationRelativeThickness / 2;
-        const thickness = this.fontSizeInPixels * this._decorationRelativeThickness;
-        const underlineYOffset = this.fontSizeInPixels * this._underlineRelativeY;
-        const lineThroughYOffset = this.fontSizeInPixels * this._lineThroughRelativeY;
+        const thickness = Math.ceil(this.fontSizeInPixels * this._decorationRelativeThickness);
+        const underlineYOffset = Math.ceil(this.fontSizeInPixels * this._underlineRelativeY);
+        const lineThroughYOffset = Math.ceil(this.fontSizeInPixels * this._lineThroughRelativeY);
+        const decorationOverlap = Math.ceil(this.fontSizeInPixels * 0.04);
 
         if (! width && (attr.underline || attr.lineThrough || attr.frame) ) {
             this._setContextAttributesForMeasure(context, attr);
@@ -932,32 +932,32 @@ export class StructuredTextBlock extends Control {
         }
 
         if (attr.frame) {
-            //const extraWidth = Math.round(this.fontSizeInPixels * 0.05);
-            this._drawFrame(attr, x - thickness, y - height + Math.round(this.fontSizeInPixels / 3), width + 2 * thickness, height, context);
+            const frameOffset = Math.round(this.fontSizeInPixels / 3);
+            this._drawFrame(attr, x - decorationOverlap, y - height + frameOffset, width + 2 * decorationOverlap, height, context);
         }
 
         this._setContextAttributes(context, attr);
 
         if (attr.outlineWidth) {
             if (attr.underline) {
-                context.strokeRect(x - thickness, y + underlineYOffset, width, thickness);
+                context.strokeRect(x - decorationOverlap, y + underlineYOffset, width + 2 * decorationOverlap, thickness);
             }
 
             context.strokeText(text, x, y);
 
             if (attr.lineThrough) {
-                context.strokeRect(x - thickness, y + lineThroughYOffset, width, thickness);
+                context.strokeRect(x - decorationOverlap, y + lineThroughYOffset, width + 2 * decorationOverlap, thickness);
             }
         }
 
         if (attr.underline) {
-            context.fillRect(x - thickness, y + underlineYOffset, width, thickness);
+            context.fillRect(x - decorationOverlap, y + underlineYOffset, width + 2 * decorationOverlap, thickness);
         }
 
         context.fillText(text, x, y);
 
         if (attr.lineThrough) {
-            context.fillRect(x - thickness, y + lineThroughYOffset, width, thickness);
+            context.fillRect(x - decorationOverlap, y + lineThroughYOffset, width + 2 * decorationOverlap, thickness);
         }
     }
 
