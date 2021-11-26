@@ -679,7 +679,6 @@ export class StructuredTextBlock extends Control {
                 break;
         }
 
-        rootY += this._currentMeasure.top;
         this._characterCount = 0;
         const width = this._currentMeasure.width;
         const lineSpacing = this._lineSpacing.isPixel ? this._lineSpacing.getValue(this._host) : this._lineSpacing.getValue(this._host) * this._height.getValueInPixel(this._host, this._cachedParentMeasure.height);
@@ -701,9 +700,6 @@ export class StructuredTextBlock extends Control {
                     x = (width - line.metrics.width) / 2;
                     break;
             }
-
-            // Add the margin
-            x += this._currentMeasure.left;
 
             line.metrics.x = x;
             line.metrics.baselineY = rootY;
@@ -774,7 +770,36 @@ export class StructuredTextBlock extends Control {
         return lines;
     }
 
+    protected _splitIntoCharacters(line: StructuredText, context: ICanvasRenderingContext): StructuredText {
+        let splitted = [];
+
+        for (let i = 0 ; i < line.length ; i ++) {
+            let part = line[ i ];
+            if (part.splitIntoCharacters && part.text.length > 1) {
+                splitted.length = 0;
+                const attr = this._inheritAttributes(part);
+                this._setContextAttributesForMeasure(context , attr);
+
+                for (let character of part.text) {
+                    let newPart = Object.assign({}, part);
+                    newPart.text = character;
+                    delete newPart.metrics;
+                    //const textMetrics = context.measureText(character);
+                    //newPart.metrics = new StructuredTextMetrics(textMetrics.width);
+                    splitted.push(newPart);
+                }
+
+                this._structuredTextWidth(splitted, context);
+                line.splice(i, 1, ...splitted);
+                i += splitted.length - 1;
+            }
+        }
+
+        return line;
+    }
+
     protected _parseStructuredTextLine(line: StructuredText, context: ICanvasRenderingContext): StructuredTextLine {
+        this._splitIntoCharacters(line, context);
         const lineWidth = this._structuredTextWidth(line , context);
         return { parts: line, metrics: new StructuredTextMetrics(lineWidth) };
     }
@@ -799,6 +824,7 @@ export class StructuredTextBlock extends Control {
             }
         }
 
+        this._splitIntoCharacters(line, context);
         return { parts: line, metrics: new StructuredTextMetrics(lineWidth) };
     }
 
@@ -839,7 +865,8 @@ export class StructuredTextBlock extends Control {
             const part = structuredText[ index ];
 
             if (
-                last.color === part.color
+                ! last.splitIntoCharacters && ! part.splitIntoCharacters
+                && last.color === part.color
                 && last.underline === part.underline
                 && last.lineThrough === part.lineThrough
                 && last.frame === part.frame && (! part.frame || (
@@ -923,7 +950,7 @@ export class StructuredTextBlock extends Control {
             if (testWidth > width && testLine.length > 1) {
                 testLine.pop();
                 //lines.push( { parts: testLine , width: lastTestWidth } ) ;
-                lines.push({ parts: StructuredTextBlock._fuseStructuredTextParts(testLine) , metrics: new StructuredTextMetrics(lastTestWidth) });
+                lines.push({ parts: this._splitIntoCharacters(StructuredTextBlock._fuseStructuredTextParts(testLine), context), metrics: new StructuredTextMetrics(lastTestWidth) });
 
                 // Create a new line with the current word as the first word.
                 // We have to left-trim it because it mays contain a space.
@@ -934,7 +961,7 @@ export class StructuredTextBlock extends Control {
             }
         }
 
-        lines.push({ parts: StructuredTextBlock._fuseStructuredTextParts(testLine) , metrics: new StructuredTextMetrics(testWidth) });
+        lines.push({ parts: this._splitIntoCharacters(StructuredTextBlock._fuseStructuredTextParts(testLine), context), metrics: new StructuredTextMetrics(testWidth) });
 
         return lines;
     }
@@ -950,6 +977,8 @@ export class StructuredTextBlock extends Control {
 
     protected _renderLines(context: ICanvasRenderingContext): void {
         let charCount = 0;
+        let top = this._currentMeasure.top;
+        let left = this._currentMeasure.left;
 
         for (let i = 0; i < this._lines.length; i++) {
             const line = this._lines[i];
@@ -957,14 +986,17 @@ export class StructuredTextBlock extends Control {
             for (let part of line.parts) {
                 if (charCount >= this._characterLimit) { return; }
 
+                // Keep Y inside the second loop, because each part can have is own Y even on the same line (e.g. allow subscript or superscript support in the future)
+                const y = top + part.metrics.baselineY;
+                const x = left + part.metrics.x;
                 const attr = this._inheritAttributes(part);
 
                 if (charCount + part.text.length > this._characterLimit) {
-                    this._drawText(part.text.slice(0, this._characterLimit - charCount), attr, part.metrics.x, part.metrics.baselineY, -1 , part.metrics.height, context);
+                    this._drawText(part.text.slice(0, this._characterLimit - charCount), attr, x, y, -1 , part.metrics.height, context);
                     return;
                 }
 
-                this._drawText(part.text, attr, part.metrics.x, part.metrics.baselineY, part.metrics.width, part.metrics.height, context);
+                this._drawText(part.text, attr, x, y, part.metrics.width, part.metrics.height, context);
                 charCount += part.text.length;
             }
         }

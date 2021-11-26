@@ -27,6 +27,10 @@ export interface IStructuredTextPart {
     shadowOffsetX?: number;
     shadowOffsetY?: number;
 
+    // Force splitting this part into one part per character.
+    // This is useful for special effects.
+    splitIntoCharacters?: boolean;
+
     // Computed metrics
     metrics?: StructuredTextMetrics;
 
