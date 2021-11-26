@@ -48,6 +48,13 @@ type TextPartAttributes = {
     shadowOffsetY: number;
 };
 
+type Size = {
+    width: number ,
+    height: number ,
+    ascent: number ,
+    descent: number
+};
+
 /**
  * Class used to create structured text block control
  */
@@ -670,13 +677,15 @@ export class StructuredTextBlock extends Control {
         // /!\ SHOULD BE DONE at render time???
         switch (this._textVerticalAlignment) {
             case Control.VERTICAL_ALIGNMENT_TOP:
-                rootY = this._fontOffset.ascent;
+                rootY = 0;
                 break;
             case Control.VERTICAL_ALIGNMENT_BOTTOM:
+                // TODO
                 rootY = height - this._fontOffset.height * (this._lines.length - 1) - this._fontOffset.descent;
                 break;
             case Control.VERTICAL_ALIGNMENT_CENTER:
-                rootY = this._fontOffset.ascent + (height - this._fontOffset.height * this._lines.length) / 2;
+                //TODO
+                rootY = (height - this._fontOffset.height * this._lines.length) / 2;
                 break;
         }
 
@@ -687,6 +696,7 @@ export class StructuredTextBlock extends Control {
 
         for (let i = 0; i < this._lines.length; i++) {
             const line = this._lines[i];
+            rootY += line.metrics.ascent;
             let x = 0;
             //console.warn("line metrics",line.metrics.width,line,width);
 
@@ -705,28 +715,35 @@ export class StructuredTextBlock extends Control {
             line.metrics.x = x;
             line.metrics.baselineY = rootY;
 
+            /*
             let lineHeight = 0;
             let lineAscent = 0;
             let lineDescent = 0;
+            */
 
             for (let part of line.parts) {
                 part.dynamicCustomData = null;  // Always nullify it
                 part.metrics.x = x;
                 part.metrics.baselineY = rootY;
 
+                /*
                 if (part.metrics.height > lineHeight) { lineHeight = part.metrics.height; }
                 if (part.metrics.ascent > lineAscent) { lineAscent = part.metrics.ascent; }
                 if (part.metrics.descent > lineDescent) { lineDescent = part.metrics.descent; }
+                */
 
                 x += part.metrics.width;
                 this._characterCount += part.text.length;
             }
 
+            /*
             line.metrics.height = lineHeight;
             line.metrics.ascent = lineAscent;
             line.metrics.descent = lineDescent;
+            */
 
-            rootY += lineHeight + lineSpacing;
+            //rootY += line.metrics.height + lineSpacing;
+            rootY += line.metrics.descent + lineSpacing;
         }
 
         this._linesAreDirty = false;
@@ -779,6 +796,7 @@ export class StructuredTextBlock extends Control {
 
     protected _splitIntoCharacters(line: StructuredText, context: ICanvasRenderingContext): StructuredText {
         let splitted = [];
+        const reusableSize = { width: 0, height: 0, ascent: 0, descent: 0 };
 
         for (let i = 0 ; i < line.length ; i ++) {
             let part = line[ i ];
@@ -796,7 +814,7 @@ export class StructuredTextBlock extends Control {
                     splitted.push(newPart);
                 }
 
-                this._structuredTextWidth(splitted, context);
+                this._computeAllSizes(splitted, context, reusableSize);
                 line.splice(i, 1, ...splitted);
                 i += splitted.length - 1;
             }
@@ -807,32 +825,31 @@ export class StructuredTextBlock extends Control {
 
     protected _parseStructuredTextLine(line: StructuredText, context: ICanvasRenderingContext): StructuredTextLine {
         this._splitIntoCharacters(line, context);
-        const lineWidth = this._structuredTextWidth(line , context);
-        return { parts: line, metrics: new StructuredTextMetrics(lineWidth) };
+        const size = this._computeAllSizes(line , context);
+        return { parts: line, metrics: new StructuredTextMetrics(size.width, size.height, size.ascent, size.descent) };
     }
 
     protected _parseStructuredTextLineEllipsis(line: StructuredText, width: number , context: ICanvasRenderingContext): StructuredTextLine {
-        let lineWidth = this._structuredTextWidth(line , context);
+        let size = this._computeAllSizes(line , context);
 
-        while (line.length && lineWidth > width) {
+        while (line.length && size.width > width) {
             const _part = line[ line.length - 1 ];
             const characters = Array.from(_part.text);
 
-            while (characters.length && lineWidth > width) {
+            while (characters.length && size.width > width) {
                 characters.pop() ;
-
                 _part.text = characters.join('') + "…";
-                delete _part.metrics;    // delete .metrics, so ._structuredTextWidth() will re-compute it instead of using the existing one
-                lineWidth = this._structuredTextWidth(line , context);
+                delete _part.metrics;    // delete .metrics, so ._computeAllSizes() will re-compute it instead of using the existing one
+                this._computeAllSizes(line , context, size);
             }
 
-            if (lineWidth > width) {
+            if (size.width > width) {
                 line.pop();
             }
         }
 
         this._splitIntoCharacters(line, context);
-        return { parts: line, metrics: new StructuredTextMetrics(lineWidth) };
+        return { parts: line, metrics: new StructuredTextMetrics(size.width, size.height, size.ascent, size.descent) };
     }
 
     // This splitting function does not exlude the splitter, it keeps it on the right-side of the split.
@@ -841,8 +858,6 @@ export class StructuredTextBlock extends Control {
         let lastIndex = 0;
         const splitted = [];
         const regexp = / +/g;
-
-        //str = str.trim() ;
 
         while (match = regexp.exec(str)) {
             if (lastIndex < match.index) {
@@ -910,10 +925,14 @@ export class StructuredTextBlock extends Control {
 
     // Set the width of each parts and return the total width
     // /!\ SHOULD RETURN height, ascent and descent too?
-    protected _structuredTextWidth(structuredText: StructuredText, context: ICanvasRenderingContext): number {
+    protected _computeAllSizes(structuredText: StructuredText, context: ICanvasRenderingContext, size: Size = { width: 0, height: 0, ascent: 0, descent: 0 }): Size {
         let contextSaved = false;
+        size.width = 0;
+        size.height = 0;
+        size.ascent = 0;
+        size.descent = 0;
 
-        let _width = structuredText.reduce((width , part) => {
+        for ( let part of structuredText) {
             if (! part.metrics) {
                 if (! contextSaved) { context.save() ; }
 
@@ -928,12 +947,15 @@ export class StructuredTextBlock extends Control {
                 part.metrics = new StructuredTextMetrics(width, fontOffset.height, fontOffset.ascent, fontOffset.descent);
             }
 
-            return width + part.metrics.width;
-        } , 0);
+            size.width += part.metrics.width;
+            if (part.metrics.height > size.height) { size.height = part.metrics.height ; }
+            if (part.metrics.ascent > size.ascent) { size.ascent = part.metrics.ascent ; }
+            if (part.metrics.descent > size.descent) { size.descent = part.metrics.descent ; }
+        }
 
         if (contextSaved) { context.restore(); }
 
-        return _width;
+        return size;
     }
 
     protected _parseStructuredTextLineWordWrap(line: StructuredText, width: number, context: ICanvasRenderingContext): StructuredTextLines {
@@ -950,30 +972,38 @@ export class StructuredTextBlock extends Control {
             }
         }
 
-        let lastTestWidth = 0;
-        let testWidth = 0;
+        let lastTestSize = { width: 0, height: 0, ascent: 0, descent: 0 };
+        let testSize = { width: 0, height: 0, ascent: 0, descent: 0 };
+        let tmp = null;
         let testLine: StructuredText = [];
 
         for (let _word of words) {
             testLine.push(_word);
-            lastTestWidth = testWidth;
-            testWidth = this._structuredTextWidth(testLine , context);
+            // swap
+            tmp = lastTestSize; lastTestSize = testSize; testSize = tmp;
+            this._computeAllSizes(testLine , context, testSize);
 
-            if (testWidth > width && testLine.length > 1) {
+            if (testSize.width > width && testLine.length > 1) {
                 testLine.pop();
                 //lines.push( { parts: testLine , width: lastTestWidth } ) ;
-                lines.push({ parts: this._splitIntoCharacters(StructuredTextBlock._fuseStructuredTextParts(testLine), context), metrics: new StructuredTextMetrics(lastTestWidth) });
+                lines.push({
+                    parts: this._splitIntoCharacters(StructuredTextBlock._fuseStructuredTextParts(testLine), context),
+                    metrics: new StructuredTextMetrics(lastTestSize.width, lastTestSize.height, lastTestSize.ascent, lastTestSize.descent)
+                });
 
                 // Create a new line with the current word as the first word.
                 // We have to left-trim it because it mays contain a space.
                 _word.text = _word.text.trimStart();
-                delete _word.metrics;    // delete .metrics, so ._structuredTextWidth() will re-compute it instead of using the existing one
+                delete _word.metrics;    // delete .metrics, so ._computeAllSizes() will re-compute it instead of using the existing one
                 testLine = [ _word ];
-                testWidth = this._structuredTextWidth(testLine , context);
+                this._computeAllSizes(testLine , context, testSize);
             }
         }
 
-        lines.push({ parts: this._splitIntoCharacters(StructuredTextBlock._fuseStructuredTextParts(testLine), context), metrics: new StructuredTextMetrics(testWidth) });
+        lines.push({
+            parts: this._splitIntoCharacters(StructuredTextBlock._fuseStructuredTextParts(testLine), context),
+            metrics: new StructuredTextMetrics(testSize.width, testSize.height, testSize.ascent, testSize.descent)
+        });
 
         return lines;
     }
