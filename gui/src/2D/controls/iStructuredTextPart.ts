@@ -15,7 +15,8 @@ export interface IStructuredTextPart {
     frameOutlineColor?: string;
     frameCornerRadius?: number;
 
-    // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
+    fontFamily?: string;
+    fontSize?: string;
     fontStyle?: string;
     fontWeight?: string;
 

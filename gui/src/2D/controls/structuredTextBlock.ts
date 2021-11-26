@@ -34,7 +34,8 @@ type TextPartAttributes = {
     frameOutlineWidth: number;
     frameOutlineColor: string;
 
-    // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
+    fontFamily: string;
+    fontSize: string;
     fontStyle: string;
     fontWeight: string;
 
@@ -513,9 +514,7 @@ export class StructuredTextBlock extends Control {
         // .fillStyle and .strokeStyle can receive a CSS color string, a CanvasGradient or a CanvasPattern,
         // but here we just care about color string.
         context.fillStyle = attr.color;
-
-        // Disallow changing font size and family? If this would be allowed, line-height computing would need to be upgraded...
-        context.font = attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily;
+        context.font = attr.fontStyle + " " + attr.fontWeight + " " + attr.fontSize + " " + attr.fontFamily;
 
         if (attr.shadowBlur || attr.shadowOffsetX || attr.shadowOffsetY) {
             if (attr.shadowColor) { context.shadowColor = attr.shadowColor; }
@@ -540,7 +539,7 @@ export class StructuredTextBlock extends Control {
 
     // Like ._setContextAttributesForMeasure(), but only set up attributes that cares for measuring the text
     private _setContextAttributesForMeasure(context: ICanvasRenderingContext, attr: TextPartAttributes) {
-        context.font = attr.fontStyle + " " + attr.fontWeight + " " + this.fontSize + " " + this._fontFamily ;
+        context.font = attr.fontStyle + " " + attr.fontWeight + " " + attr.fontSize + " " + attr.fontFamily ;
     }
 
     // Compute an attribute object from a text's part, inheriting from this
@@ -561,9 +560,10 @@ export class StructuredTextBlock extends Control {
             frameOutlineColor: part.frameOutlineColor ?? this._frameOutlineColor ,
             frameCornerRadius: part.frameCornerRadius ?? this._frameCornerRadius,
 
-            // For instance, font size and family is not updatable, the whole StructuredTextBlock shares the same size and family (not useful and it introduces complexity)
+            fontFamily: part.fontFamily ?? this._style?.fontFamily ?? this._fontFamily ,
+            fontSize: '' + (part.fontSize ?? this._style?.fontSize ?? this._fontSize) ,
             fontStyle: part.fontStyle ?? this._style?.fontStyle ?? this._fontStyle ,
-            fontWeight: part.fontWeight ?? this._style?.fontWeight ?? this._fontWeight ,
+            fontWeight: part.fontWeight ?? this._style?.fontWeight ?? this._fontWeight
         };
     }
 
@@ -667,6 +667,7 @@ export class StructuredTextBlock extends Control {
         const height = this._currentMeasure.height;
         let rootY = 0;
 
+        // /!\ SHOULD BE DONE at render time???
         switch (this._textVerticalAlignment) {
             case Control.VERTICAL_ALIGNMENT_TOP:
                 rootY = this._fontOffset.ascent;
@@ -682,7 +683,7 @@ export class StructuredTextBlock extends Control {
         this._characterCount = 0;
         const width = this._currentMeasure.width;
         const lineSpacing = this._lineSpacing.isPixel ? this._lineSpacing.getValue(this._host) : this._lineSpacing.getValue(this._host) * this._height.getValueInPixel(this._host, this._cachedParentMeasure.height);
-        const lineHeight = this._fontOffset.height;
+        //const lineHeight = this._fontOffset.height;
 
         for (let i = 0; i < this._lines.length; i++) {
             const line = this._lines[i];
@@ -704,20 +705,26 @@ export class StructuredTextBlock extends Control {
             line.metrics.x = x;
             line.metrics.baselineY = rootY;
 
-            // This would change when variable font-size would be supported
-            line.metrics.height = lineHeight;
+            let lineHeight = 0;
+            let lineAscent = 0;
+            let lineDescent = 0;
 
             for (let part of line.parts) {
                 part.dynamicCustomData = null;  // Always nullify it
                 part.metrics.x = x;
                 part.metrics.baselineY = rootY;
 
-                // This would change when variable font-size would be supported
-                part.metrics.height = lineHeight;
+                if (part.metrics.height > lineHeight) { lineHeight = part.metrics.height; }
+                if (part.metrics.ascent > lineAscent) { lineAscent = part.metrics.ascent; }
+                if (part.metrics.descent > lineDescent) { lineDescent = part.metrics.descent; }
 
                 x += part.metrics.width;
                 this._characterCount += part.text.length;
             }
+
+            line.metrics.height = lineHeight;
+            line.metrics.ascent = lineAscent;
+            line.metrics.descent = lineDescent;
 
             rootY += lineHeight + lineSpacing;
         }
@@ -875,6 +882,8 @@ export class StructuredTextBlock extends Control {
                     && last.frameOutlineWidth === part.frameOutlineWidth
                     && last.frameOutlineColor === part.frameOutlineColor
                 ))
+                && last.fontFamily === part.fontFamily
+                && last.fontSize === part.fontSize
                 && last.fontStyle === part.fontStyle
                 && last.fontWeight === part.fontWeight
                 && last.outlineWidth === part.outlineWidth && last.outlineColor === part.outlineColor
@@ -900,6 +909,7 @@ export class StructuredTextBlock extends Control {
     }
 
     // Set the width of each parts and return the total width
+    // /!\ SHOULD RETURN height, ascent and descent too?
     protected _structuredTextWidth(structuredText: StructuredText, context: ICanvasRenderingContext): number {
         let contextSaved = false;
 
@@ -911,9 +921,11 @@ export class StructuredTextBlock extends Control {
                 this._setContextAttributesForMeasure(context , attr);
 
                 const textMetrics = context.measureText(part.text);
-
                 // .actualBoundingBox* does not work: sometime it skips spaces, also it's not widely supported
-                part.metrics = new StructuredTextMetrics(textMetrics.width);
+                const width = textMetrics.width;
+                const fontOffset = Control._GetFontOffset(context.font);
+
+                part.metrics = new StructuredTextMetrics(width, fontOffset.height, fontOffset.ascent, fontOffset.descent);
             }
 
             return width + part.metrics.width;
