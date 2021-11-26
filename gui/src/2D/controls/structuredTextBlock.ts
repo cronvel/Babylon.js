@@ -8,17 +8,14 @@ import { Nullable } from "babylonjs/types";
 import { serialize } from 'babylonjs/Misc/decorators';
 import { ICanvasRenderingContext , ICanvasGradient } from 'babylonjs/Engines/ICanvas';
 import { IStructuredTextPart } from './iStructuredTextPart';
-import { IStructuredTextMetrics } from './iStructuredTextMetrics';
+import { StructuredTextMetrics } from './structuredTextMetrics';
 import { Engine } from 'babylonjs/Engines/engine';
 
 type StructuredText = Array<IStructuredTextPart>;
 
 type StructuredTextLine = {
     parts: StructuredText;
-
-    // Computed line width
-    width?: number;
-    metrics?: IStructuredTextMetrics;
+    metrics?: StructuredTextMetrics;
 };
 
 type StructuredTextLines = Array<StructuredTextLine>;
@@ -113,7 +110,6 @@ export class StructuredTextBlock extends Control {
             return;
         }
         this._structuredText = value ;
-        this._characterCount = this._structuredText.reduce((count, part) => count + part.text.length, 0);
         this._markLinesAsDirty();
         this._markAsDirty();
         this.onTextChangedObservable.notifyObservers(this);
@@ -443,9 +439,16 @@ export class StructuredTextBlock extends Control {
     }
 
     /**
-    * Gets the character count of the current structuredText
-    */
+     * Gets the character count of the current structuredText once lines are _parseStructuredTextLine
+     * Only works when attached with .addControl() since it needs a Canvas context.
+     */
     public get characterCount(): number {
+        if (this._linesAreDirty) {
+            let context = this._host?.getContext();
+            if (! context) { return -1; }
+            this._computeLines(context);
+        }
+
         return this._characterCount;
     }
 
@@ -570,14 +573,18 @@ export class StructuredTextBlock extends Control {
      */
     public computeExpectedHeight(): number {
         if (this._structuredText.length && this.widthInPixels) {
-            // Shoudl abstract platform instead of using LastCreatedEngine
+            // Should abstract platform instead of using LastCreatedEngine
             const context = Engine.LastCreatedEngine?.createCanvas(0, 0).getContext("2d");
             if (context) {
                 this._applyStates(context);
                 if (!this._fontOffset) {
                     this._fontOffset = Control._GetFontOffset(context.font);
                 }
-                const lines = this._lines ? this._lines : this._breakLines(this.widthInPixels - this.paddingLeftInPixels - this.paddingRightInPixels, context);
+                if (this._linesAreDirty) {
+                    this._computeLines(context, this.widthInPixels - this.paddingLeftInPixels - this.paddingRightInPixels);
+                }
+
+                const lines = this._lines;
 
                 let newHeight = this.paddingTopInPixels + this.paddingBottomInPixels + this._fontOffset.height * lines.length;
 
@@ -607,10 +614,8 @@ export class StructuredTextBlock extends Control {
 
         // Prepare lines
         if (this._linesAreDirty || this._lastMeasuredWidth !== this._currentMeasure.width) {
-            this._lines = this._breakLines(this._currentMeasure.width, context);
-            this.onLinesReadyObservable.notifyObservers(this);
+            this._computeLines(context);
             this._lastMeasuredWidth = this._currentMeasure.width;
-            this._linesAreDirty = false;
         }
 
         let maxLineWidth: number = 0;
@@ -618,8 +623,8 @@ export class StructuredTextBlock extends Control {
         for (let i = 0; i < this._lines.length; i++) {
             const line = this._lines[i];
 
-            if (line.width > maxLineWidth) {
-                maxLineWidth = line.width;
+            if (line.metrics.width > maxLineWidth) {
+                maxLineWidth = line.metrics.width;
             }
         }
 
@@ -650,6 +655,79 @@ export class StructuredTextBlock extends Control {
                 this._rebuildLayout = true;
             }
         }
+    }
+
+    protected _computeLines(context: ICanvasRenderingContext, refWidth?: number): void {
+        this._lines = this._breakLines(refWidth ?? this._currentMeasure.width, context);
+
+        if (!this._fontOffset) {
+            this._fontOffset = Control._GetFontOffset(context.font);
+        }
+
+        const height = this._currentMeasure.height;
+        let rootY = 0;
+
+        switch (this._textVerticalAlignment) {
+            case Control.VERTICAL_ALIGNMENT_TOP:
+                rootY = this._fontOffset.ascent;
+                break;
+            case Control.VERTICAL_ALIGNMENT_BOTTOM:
+                rootY = height - this._fontOffset.height * (this._lines.length - 1) - this._fontOffset.descent;
+                break;
+            case Control.VERTICAL_ALIGNMENT_CENTER:
+                rootY = this._fontOffset.ascent + (height - this._fontOffset.height * this._lines.length) / 2;
+                break;
+        }
+
+        rootY += this._currentMeasure.top;
+        this._characterCount = 0;
+        const width = this._currentMeasure.width;
+        const lineSpacing = this._lineSpacing.isPixel ? this._lineSpacing.getValue(this._host) : this._lineSpacing.getValue(this._host) * this._height.getValueInPixel(this._host, this._cachedParentMeasure.height);
+        const lineHeight = this._fontOffset.height;
+
+        for (let i = 0; i < this._lines.length; i++) {
+            const line = this._lines[i];
+            let x = 0;
+            //console.warn("line metrics",line.metrics.width,line,width);
+
+            switch (this._textHorizontalAlignment) {
+                case Control.HORIZONTAL_ALIGNMENT_LEFT:
+                    x = 0;
+                    break;
+                case Control.HORIZONTAL_ALIGNMENT_RIGHT:
+                    x = width - line.metrics.width;
+                    break;
+                case Control.HORIZONTAL_ALIGNMENT_CENTER:
+                    x = (width - line.metrics.width) / 2;
+                    break;
+            }
+
+            // Add the margin
+            x += this._currentMeasure.left;
+
+            line.metrics.x = x;
+            line.metrics.baselineY = rootY;
+
+            // This would change when variable font-size would be supported
+            line.metrics.height = lineHeight;
+
+            for (let part of line.parts) {
+                part.dynamicCustomData = null;  // Always nullify it
+                part.metrics.x = x;
+                part.metrics.baselineY = rootY;
+
+                // This would change when variable font-size would be supported
+                part.metrics.height = lineHeight;
+
+                x += part.metrics.width;
+                this._characterCount += part.text.length;
+            }
+
+            rootY += lineHeight + lineSpacing;
+        }
+
+        this._linesAreDirty = false;
+        this.onLinesReadyObservable.notifyObservers(this);
     }
 
     protected _breakLines(refWidth: number, context: ICanvasRenderingContext): StructuredTextLines {
@@ -712,7 +790,7 @@ export class StructuredTextBlock extends Control {
                 characters.pop() ;
 
                 _part.text = characters.join('') + "…";
-                delete _part.width;    // delete .width, so ._structuredTextWidth() will re-compute it instead of using the existing one
+                delete _part.metrics;    // delete .metrics, so ._structuredTextWidth() will re-compute it instead of using the existing one
                 lineWidth = this._structuredTextWidth(line , context);
             }
 
@@ -811,7 +889,7 @@ export class StructuredTextBlock extends Control {
                 part.metrics = new StructuredTextMetrics(textMetrics.width);
             }
 
-            return width + part.width;
+            return width + part.metrics.width;
         } , 0);
 
         if (contextSaved) { context.restore(); }
@@ -845,18 +923,18 @@ export class StructuredTextBlock extends Control {
             if (testWidth > width && testLine.length > 1) {
                 testLine.pop();
                 //lines.push( { parts: testLine , width: lastTestWidth } ) ;
-                lines.push({ parts: StructuredTextBlock._fuseStructuredTextParts(testLine) , width: lastTestWidth });
+                lines.push({ parts: StructuredTextBlock._fuseStructuredTextParts(testLine) , metrics: new StructuredTextMetrics(lastTestWidth) });
 
                 // Create a new line with the current word as the first word.
                 // We have to left-trim it because it mays contain a space.
                 _word.text = _word.text.trimStart();
-                delete _word.width;    // delete .width, so ._structuredTextWidth() will re-compute it instead of using the existing one
+                delete _word.metrics;    // delete .metrics, so ._structuredTextWidth() will re-compute it instead of using the existing one
                 testLine = [ _word ];
                 testWidth = this._structuredTextWidth(testLine , context);
             }
         }
 
-        lines.push({ parts: StructuredTextBlock._fuseStructuredTextParts(testLine) , metrics: new StructuredTextMetrics(width) });
+        lines.push({ parts: StructuredTextBlock._fuseStructuredTextParts(testLine) , metrics: new StructuredTextMetrics(testWidth) });
 
         return lines;
     }
@@ -870,117 +948,25 @@ export class StructuredTextBlock extends Control {
         context.restore();
     }
 
-    protected _computeLines(context: ICanvasRenderingContext): void {
-        const height = this._currentMeasure.height;
-        let rootY = 0;
-
-        switch (this._textVerticalAlignment) {
-            case Control.VERTICAL_ALIGNMENT_TOP:
-                rootY = this._fontOffset.ascent;
-                break;
-            case Control.VERTICAL_ALIGNMENT_BOTTOM:
-                rootY = height - this._fontOffset.height * (this._lines.length - 1) - this._fontOffset.descent;
-                break;
-            case Control.VERTICAL_ALIGNMENT_CENTER:
-                rootY = this._fontOffset.ascent + (height - this._fontOffset.height * this._lines.length) / 2;
-                break;
-        }
-
-        rootY += this._currentMeasure.top;
-        this._characterCount = 0;
-        const width = this._currentMeasure.width;
-        const lineSpacing = this._lineSpacing.isPixel ? this._lineSpacing.getValue(this._host) : this._lineSpacing.getValue(this._host) * this._height.getValueInPixel(this._host, this._cachedParentMeasure.height);
-        const lineHeight = this._fontOffset.height;
-
-        for (let i = 0; i < this._lines.length; i++) {
-            const line = this._lines[i];
-            let x = 0;
-
-            switch (this._textHorizontalAlignment) {
-                case Control.HORIZONTAL_ALIGNMENT_LEFT:
-                    x = 0;
-                    break;
-                case Control.HORIZONTAL_ALIGNMENT_RIGHT:
-                    x = width - line.width;
-                    break;
-                case Control.HORIZONTAL_ALIGNMENT_CENTER:
-                    x = (width - line.width) / 2;
-                    break;
-            }
-
-            // Add the margin
-            x += this._currentMeasure.left;
-
-            for (let part of line.parts) {
-                const partWidth = part.width || 0;
-
-
-                x += partWidth;
-                this._characterCount += part.text.length;
-            }
-
-            rootY += lineHeight + lineSpacing;
-        }
-    }
-
     protected _renderLines(context: ICanvasRenderingContext): void {
-        const height = this._currentMeasure.height;
-        let rootY = 0;
-
-        switch (this._textVerticalAlignment) {
-            case Control.VERTICAL_ALIGNMENT_TOP:
-                rootY = this._fontOffset.ascent;
-                break;
-            case Control.VERTICAL_ALIGNMENT_BOTTOM:
-                rootY = height - this._fontOffset.height * (this._lines.length - 1) - this._fontOffset.descent;
-                break;
-            case Control.VERTICAL_ALIGNMENT_CENTER:
-                rootY = this._fontOffset.ascent + (height - this._fontOffset.height * this._lines.length) / 2;
-                break;
-        }
-
-        rootY += this._currentMeasure.top;
         let charCount = 0;
-        const width = this._currentMeasure.width;
-        const lineSpacing = this._lineSpacing.isPixel ? this._lineSpacing.getValue(this._host) : this._lineSpacing.getValue(this._host) * this._height.getValueInPixel(this._host, this._cachedParentMeasure.height);
-        const lineHeight = this._fontOffset.height;
 
         for (let i = 0; i < this._lines.length; i++) {
             const line = this._lines[i];
-            let x = 0;
-
-            switch (this._textHorizontalAlignment) {
-                case Control.HORIZONTAL_ALIGNMENT_LEFT:
-                    x = 0;
-                    break;
-                case Control.HORIZONTAL_ALIGNMENT_RIGHT:
-                    x = width - line.width;
-                    break;
-                case Control.HORIZONTAL_ALIGNMENT_CENTER:
-                    x = (width - line.width) / 2;
-                    break;
-            }
-
-            // Add the margin
-            x += this._currentMeasure.left;
 
             for (let part of line.parts) {
-                const partWidth = part.width || 0;
                 if (charCount >= this._characterLimit) { return; }
 
                 const attr = this._inheritAttributes(part);
 
                 if (charCount + part.text.length > this._characterLimit) {
-                    this._drawText(part.text.slice(0, this._characterLimit - charCount), attr, x, rootY, 0 , lineHeight, context);
+                    this._drawText(part.text.slice(0, this._characterLimit - charCount), attr, part.metrics.x, part.metrics.baselineY, -1 , part.metrics.height, context);
                     return;
                 }
 
-                this._drawText(part.text, attr, x, rootY, partWidth, lineHeight, context);
-                x += partWidth;
+                this._drawText(part.text, attr, part.metrics.x, part.metrics.baselineY, part.metrics.width, part.metrics.height, context);
                 charCount += part.text.length;
             }
-
-            rootY += lineHeight + lineSpacing;
         }
     }
 
@@ -990,7 +976,8 @@ export class StructuredTextBlock extends Control {
         const lineThroughYOffset = Math.ceil(this.fontSizeInPixels * this._lineThroughRelativeY);
         const decorationOverlap = Math.ceil(this.fontSizeInPixels * 0.04);
 
-        if (! width && (attr.underline || attr.lineThrough || attr.frame)) {
+        if (width === -1 && (attr.underline || attr.lineThrough || attr.frame)) {
+            // Here we have to dynamicly re-compute the width
             this._setContextAttributesForMeasure(context, attr);
             width = context.measureText(text).width;
         }

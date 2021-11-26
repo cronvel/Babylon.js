@@ -8,7 +8,7 @@ export class StructuredTextMetrics {
     public baselineY: number = 0;
     public height: number = 0;
 
-    constructor(public width: number) {
+    constructor(width: number) {
         if ( width ) { this.width = width ; }
     }
 

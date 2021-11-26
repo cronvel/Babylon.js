@@ -1,5 +1,5 @@
 import { ICanvasGradient } from 'babylonjs/Engines/ICanvas';
-import { IStructuredTextMetrics } from 'babylonjs/Engines/ICanvas';
+import { StructuredTextMetrics } from './structuredTextMetrics';
 
 export interface IStructuredTextPart {
     text: string;
@@ -27,7 +27,10 @@ export interface IStructuredTextPart {
     shadowOffsetX?: number;
     shadowOffsetY?: number;
 
-    // Computed part width
-    width?: number;
-    metrics?: IStructuredTextMetrics;
+    // Computed metrics
+    metrics?: StructuredTextMetrics;
+
+    // Userland data
+    staticCustomData?: object;
+    dynamicCustomData?: object;
 }
