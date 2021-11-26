@@ -8,6 +8,7 @@ import { Nullable } from "babylonjs/types";
 import { serialize } from 'babylonjs/Misc/decorators';
 import { ICanvasRenderingContext , ICanvasGradient } from 'babylonjs/Engines/ICanvas';
 import { IStructuredTextPart } from './iStructuredTextPart';
+import { IStructuredTextMetrics } from './iStructuredTextMetrics';
 import { Engine } from 'babylonjs/Engines/engine';
 
 type StructuredText = Array<IStructuredTextPart>;
@@ -17,7 +18,9 @@ type StructuredTextLine = {
 
     // Computed line width
     width?: number;
+    metrics?: IStructuredTextMetrics;
 };
+
 type StructuredTextLines = Array<StructuredTextLine>;
 
 // Mostly the same than IStructuredTextPart, but nothing is optional here,
@@ -655,6 +658,7 @@ export class StructuredTextBlock extends Control {
         let _currentLine: StructuredText = [];
         const _lines: Array<StructuredText> = [ _currentLine ];
 
+        // First split on \n
         for (let _part of this._structuredText) {
             if (_part.text.includes('\n')) {
                 for (let _splitted of _part.text.split('\n')) {
@@ -672,6 +676,7 @@ export class StructuredTextBlock extends Control {
             }
         }
 
+        // Then split/apply text-wrapping
         if (this._textWrapping === TextWrapping.Ellipsis) {
             for (let _line of _lines) {
                 lines.push(this._parseStructuredTextLineEllipsis(_line, refWidth, context));
@@ -693,7 +698,7 @@ export class StructuredTextBlock extends Control {
 
     protected _parseStructuredTextLine(line: StructuredText, context: ICanvasRenderingContext): StructuredTextLine {
         const lineWidth = this._structuredTextWidth(line , context);
-        return { parts: line, width: lineWidth };
+        return { parts: line, metrics: new StructuredTextMetrics(lineWidth) };
     }
 
     protected _parseStructuredTextLineEllipsis(line: StructuredText, width: number , context: ICanvasRenderingContext): StructuredTextLine {
@@ -716,7 +721,7 @@ export class StructuredTextBlock extends Control {
             }
         }
 
-        return { parts: line, width: lineWidth };
+        return { parts: line, metrics: new StructuredTextMetrics(lineWidth) };
     }
 
     // This splitting function does not exlude the splitter, it keeps it on the right-side of the split.
@@ -772,7 +777,11 @@ export class StructuredTextBlock extends Control {
                 && last.shadowOffsetX === part.shadowOffsetX && last.shadowOffsetY === part.shadowOffsetY
             ) {
                 lastInserted.text += part.text;
-                lastInserted.width = (lastInserted.width || 0) + (part.width || 0);   // It's never undefined here, but it's needed to please tsc
+
+                // Note that it's always defined at this point
+                if (lastInserted.metrics && part.metrics) {
+                    lastInserted.metrics.fuseWithRightPart(part.metrics);
+                }
             }
             else {
                 output.push(part);
@@ -790,7 +799,7 @@ export class StructuredTextBlock extends Control {
         let contextSaved = false;
 
         let _width = structuredText.reduce((width , part) => {
-            if (part.width === undefined) {
+            if (! part.metrics) {
                 if (! contextSaved) { context.save() ; }
 
                 const attr = this._inheritAttributes(part);
@@ -799,9 +808,7 @@ export class StructuredTextBlock extends Control {
                 const textMetrics = context.measureText(part.text);
 
                 // .actualBoundingBox* does not work: sometime it skips spaces, also it's not widely supported
-                part.width = textMetrics.width;
-                //part.width = Math.abs( textMetrics.actualBoundingBoxLeft ) + Math.abs( textMetrics.actualBoundingBoxRight ) ;
-                //part.width = Math.abs( textMetrics.actualBoundingBoxRight - textMetrics.actualBoundingBoxLeft ) ;
+                part.metrics = new StructuredTextMetrics(textMetrics.width);
             }
 
             return width + part.width;
@@ -849,7 +856,7 @@ export class StructuredTextBlock extends Control {
             }
         }
 
-        lines.push({ parts: StructuredTextBlock._fuseStructuredTextParts(testLine) , width: testWidth });
+        lines.push({ parts: StructuredTextBlock._fuseStructuredTextParts(testLine) , metrics: new StructuredTextMetrics(width) });
 
         return lines;
     }
@@ -861,6 +868,59 @@ export class StructuredTextBlock extends Control {
         // Render lines
         this._renderLines(context);
         context.restore();
+    }
+
+    protected _computeLines(context: ICanvasRenderingContext): void {
+        const height = this._currentMeasure.height;
+        let rootY = 0;
+
+        switch (this._textVerticalAlignment) {
+            case Control.VERTICAL_ALIGNMENT_TOP:
+                rootY = this._fontOffset.ascent;
+                break;
+            case Control.VERTICAL_ALIGNMENT_BOTTOM:
+                rootY = height - this._fontOffset.height * (this._lines.length - 1) - this._fontOffset.descent;
+                break;
+            case Control.VERTICAL_ALIGNMENT_CENTER:
+                rootY = this._fontOffset.ascent + (height - this._fontOffset.height * this._lines.length) / 2;
+                break;
+        }
+
+        rootY += this._currentMeasure.top;
+        this._characterCount = 0;
+        const width = this._currentMeasure.width;
+        const lineSpacing = this._lineSpacing.isPixel ? this._lineSpacing.getValue(this._host) : this._lineSpacing.getValue(this._host) * this._height.getValueInPixel(this._host, this._cachedParentMeasure.height);
+        const lineHeight = this._fontOffset.height;
+
+        for (let i = 0; i < this._lines.length; i++) {
+            const line = this._lines[i];
+            let x = 0;
+
+            switch (this._textHorizontalAlignment) {
+                case Control.HORIZONTAL_ALIGNMENT_LEFT:
+                    x = 0;
+                    break;
+                case Control.HORIZONTAL_ALIGNMENT_RIGHT:
+                    x = width - line.width;
+                    break;
+                case Control.HORIZONTAL_ALIGNMENT_CENTER:
+                    x = (width - line.width) / 2;
+                    break;
+            }
+
+            // Add the margin
+            x += this._currentMeasure.left;
+
+            for (let part of line.parts) {
+                const partWidth = part.width || 0;
+
+
+                x += partWidth;
+                this._characterCount += part.text.length;
+            }
+
+            rootY += lineHeight + lineSpacing;
+        }
     }
 
     protected _renderLines(context: ICanvasRenderingContext): void {

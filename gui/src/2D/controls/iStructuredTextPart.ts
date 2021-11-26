@@ -1,4 +1,5 @@
 import { ICanvasGradient } from 'babylonjs/Engines/ICanvas';
+import { IStructuredTextMetrics } from 'babylonjs/Engines/ICanvas';
 
 export interface IStructuredTextPart {
     text: string;
@@ -28,4 +29,5 @@ export interface IStructuredTextPart {
 
     // Computed part width
     width?: number;
+    metrics?: IStructuredTextMetrics;
 }
