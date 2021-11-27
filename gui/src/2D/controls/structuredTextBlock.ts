@@ -58,7 +58,6 @@ type Size = {
 /**
  * Class used to create structured text block control
  */
-//export class StructuredTextBlock extends TextBlock {
 export class StructuredTextBlock extends Control {
     private _structuredText: StructuredText = [];
     private _textWrapping = TextWrapping.Clip;
@@ -80,6 +79,12 @@ export class StructuredTextBlock extends Control {
     private _underlineRelativeY: number = 0.15;
     private _lineThroughRelativeY: number = -0.3;
     private _decorationRelativeThickness: number = 0.08;
+
+    private _scrollY: number = 0;
+
+    // Width and height of the actual content
+    private _contentWidth: number = 0;
+    private _contentHeight: number = 0;
 
     // Useful for various optimization (e.g. avoiding parsing lines when it shouldn't)
     private _characterCount: number = 0;
@@ -184,23 +189,52 @@ export class StructuredTextBlock extends Control {
     }
 
     /**
-    * Return the line list (you may need to use the onLinesReadyObservable to make sure the list is ready)
-    */
+     * Return the line list (you may need to use the onLinesReadyObservable to make sure the list is ready)
+     */
     public get lines(): any[] {
         return this._lines;
     }
 
     /**
-    * Gets or sets an boolean indicating that the StructuredTextBlock will be resized to fit container
-    */
+     * Get the Y-scrolling value
+     */
+    public get scrollY(): number {
+        return this._scrollY;
+    }
+
+    /**
+     * Set the Y-scrolling value
+     */
+    public set scrollY(value: number) {
+        this._scrollY = + value || 0;
+        this._markAsDirty();
+    }
+
+    /**
+     * Return the width of the actual text content
+     */
+    public get contentWidth(): number {
+        return this._contentWidth;
+    }
+
+    /**
+     * Return the height of the actual text content
+     */
+    public get contentHeight(): number {
+        return this._contentHeight;
+    }
+
+    /**
+     * Gets or sets an boolean indicating that the StructuredTextBlock will be resized to fit container
+     */
     @serialize()
     public get resizeToFit(): boolean {
         return this._resizeToFit;
     }
 
     /**
-    * Gets or sets an boolean indicating that the StructuredTextBlock will be resized to fit container
-    */
+     * Gets or sets an boolean indicating that the StructuredTextBlock will be resized to fit container
+     */
     public set resizeToFit(value: boolean) {
         if (this._resizeToFit === value) {
             return;
@@ -671,32 +705,18 @@ export class StructuredTextBlock extends Control {
             this._fontOffset = Control._GetFontOffset(context.font);
         }
 
-        const height = this._currentMeasure.height;
-        let rootY = 0;
-
-        // /!\ SHOULD BE DONE at render time???
-        switch (this._textVerticalAlignment) {
-            case Control.VERTICAL_ALIGNMENT_TOP:
-                rootY = 0;
-                break;
-            case Control.VERTICAL_ALIGNMENT_BOTTOM:
-                // TODO
-                rootY = height - this._fontOffset.height * (this._lines.length - 1) - this._fontOffset.descent;
-                break;
-            case Control.VERTICAL_ALIGNMENT_CENTER:
-                //TODO
-                rootY = (height - this._fontOffset.height * this._lines.length) / 2;
-                break;
-        }
-
         this._characterCount = 0;
+        this._contentWidth = 0;
+        this._contentHeight = 0;
+        let y = 0;
         const width = this._currentMeasure.width;
         const lineSpacing = this._lineSpacing.isPixel ? this._lineSpacing.getValue(this._host) : this._lineSpacing.getValue(this._host) * this._height.getValueInPixel(this._host, this._cachedParentMeasure.height);
-        //const lineHeight = this._fontOffset.height;
 
         for (let i = 0; i < this._lines.length; i++) {
             const line = this._lines[i];
-            rootY += line.metrics.ascent;
+            y += line.metrics.ascent;
+            this._contentHeight += line.metrics.height;
+            if (line.metrics.width > this._contentWidth) { this._contentWidth = line.metrics.width; }
             let x = 0;
             //console.warn("line metrics",line.metrics.width,line,width);
 
@@ -713,37 +733,18 @@ export class StructuredTextBlock extends Control {
             }
 
             line.metrics.x = x;
-            line.metrics.baselineY = rootY;
-
-            /*
-            let lineHeight = 0;
-            let lineAscent = 0;
-            let lineDescent = 0;
-            */
+            line.metrics.baselineY = y;
 
             for (let part of line.parts) {
                 part.dynamicCustomData = null;  // Always nullify it
                 part.metrics.x = x;
-                part.metrics.baselineY = rootY;
-
-                /*
-                if (part.metrics.height > lineHeight) { lineHeight = part.metrics.height; }
-                if (part.metrics.ascent > lineAscent) { lineAscent = part.metrics.ascent; }
-                if (part.metrics.descent > lineDescent) { lineDescent = part.metrics.descent; }
-                */
+                part.metrics.baselineY = y;
 
                 x += part.metrics.width;
                 this._characterCount += part.text.length;
             }
 
-            /*
-            line.metrics.height = lineHeight;
-            line.metrics.ascent = lineAscent;
-            line.metrics.descent = lineDescent;
-            */
-
-            //rootY += line.metrics.height + lineSpacing;
-            rootY += line.metrics.descent + lineSpacing;
+            y += line.metrics.descent + lineSpacing;
         }
 
         this._linesAreDirty = false;
@@ -1019,8 +1020,19 @@ export class StructuredTextBlock extends Control {
 
     protected _renderLines(context: ICanvasRenderingContext): void {
         let charCount = 0;
-        let top = this._currentMeasure.top;
+        let top = this._currentMeasure.top + this._scrollY;
         let left = this._currentMeasure.left;
+
+        switch (this._textVerticalAlignment) {
+            // No offset, so nothing to do for top alignment
+            //case Control.VERTICAL_ALIGNMENT_TOP:
+            case Control.VERTICAL_ALIGNMENT_BOTTOM:
+                top += this._currentMeasure.height - this._contentHeight;
+                break;
+            case Control.VERTICAL_ALIGNMENT_CENTER:
+                top += (this._currentMeasure.height - this._contentHeight) / 2;
+                break;
+        }
 
         for (let i = 0; i < this._lines.length; i++) {
             const line = this._lines[i];
