@@ -80,6 +80,7 @@ export class StructuredTextBlock extends Control {
     private _lineThroughRelativeY: number = -0.3;
     private _decorationRelativeThickness: number = 0.08;
 
+    private _scrollX: number = 0;
     private _scrollY: number = 0;
 
     // Width and height of the actual content
@@ -193,6 +194,21 @@ export class StructuredTextBlock extends Control {
      */
     public get lines(): any[] {
         return this._lines;
+    }
+
+    /**
+     * Get the X-scrolling value
+     */
+    public get scrollX(): number {
+        return this._scrollX;
+    }
+
+    /**
+     * Set the X-scrolling value
+     */
+    public set scrollX(value: number) {
+        this._scrollX = + value || 0;
+        this._markAsDirty();
     }
 
     /**
@@ -1020,17 +1036,17 @@ export class StructuredTextBlock extends Control {
 
     protected _renderLines(context: ICanvasRenderingContext): void {
         let charCount = 0;
-        let top = this._currentMeasure.top + this._scrollY;
-        let left = this._currentMeasure.left;
+        let xOffset = this._currentMeasure.top + this._scrollY;
+        let yOffset = this._currentMeasure.left + this._scrollX;
 
         switch (this._textVerticalAlignment) {
             // No offset, so nothing to do for top alignment
             //case Control.VERTICAL_ALIGNMENT_TOP:
             case Control.VERTICAL_ALIGNMENT_BOTTOM:
-                top += this._currentMeasure.height - this._contentHeight;
+                xOffset += this._currentMeasure.height - this._contentHeight;
                 break;
             case Control.VERTICAL_ALIGNMENT_CENTER:
-                top += (this._currentMeasure.height - this._contentHeight) / 2;
+                xOffset += (this._currentMeasure.height - this._contentHeight) / 2;
                 break;
         }
 
@@ -1041,8 +1057,8 @@ export class StructuredTextBlock extends Control {
                 if (charCount >= this._characterLimit) { return; }
 
                 // Keep Y inside the second loop, because each part can have is own Y even on the same line (e.g. allow subscript or superscript support in the future)
-                const y = top + part.metrics.baselineY;
-                const x = left + part.metrics.x;
+                const y = xOffset + part.metrics.baselineY;
+                const x = yOffset + part.metrics.x;
                 const attr = this._inheritAttributes(part);
 
                 if (charCount + part.text.length > this._characterLimit) {
