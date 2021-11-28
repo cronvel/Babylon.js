@@ -28,6 +28,11 @@ export interface IStructuredTextPart {
     shadowOffsetX?: number;
     shadowOffsetY?: number;
 
+    // When set, change appearance of that part when the mouse is hovering it
+    hover?: boolean;
+    // When set, call observers for a click event
+    href?: any;
+
     // Force splitting this part into one part per character.
     // This is useful for special effects.
     splitIntoCharacters?: boolean;

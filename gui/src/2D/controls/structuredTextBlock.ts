@@ -1,7 +1,7 @@
 import { Observable } from "babylonjs/Misc/observable";
 import { Measure } from "../measure";
 import { ValueAndUnit } from "../valueAndUnit";
-import { Vector2 } from "babylonjs/Maths/math.vector";
+//import { Vector2 } from "babylonjs/Maths/math.vector";
 import { Control } from "./control";
 import { TextWrapping } from "./textBlock";
 import { RegisterClass } from "babylonjs/Misc/typeStore";
@@ -16,7 +16,7 @@ type StructuredText = Array<IStructuredTextPart>;
 
 type StructuredTextLine = {
     parts: StructuredText;
-    metrics?: StructuredTextMetrics;
+    metrics: StructuredTextMetrics;
 };
 
 type StructuredTextLines = Array<StructuredTextLine>;
@@ -64,7 +64,8 @@ export class StructuredTextBlock extends Control {
     private _textWrapping = TextWrapping.Clip;
     private _textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
     private _textVerticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
-    private _lines: any[];
+    //private _lines: any[];
+    private _lines: StructuredTextLines;
     private _resizeToFit: boolean = false;
 
     private _lineSpacing: ValueAndUnit = new ValueAndUnit(0);
@@ -120,8 +121,8 @@ export class StructuredTextBlock extends Control {
     }
 
     /**
-    * Gets or sets structured text to display
-    */
+     * Gets or sets structured text to display
+     */
     public set structuredText(value: StructuredText) {
         if (this._structuredText === value || ! Array.isArray(value)) {
             return;
@@ -195,7 +196,7 @@ export class StructuredTextBlock extends Control {
     /**
      * Return the line list (you may need to use the onLinesReadyObservable to make sure the list is ready)
      */
-    public get lines(): any[] {
+    public get lines(): StructuredTextLines {
         return this._lines;
     }
 
@@ -310,16 +311,16 @@ export class StructuredTextBlock extends Control {
     }
 
     /**
-    * Gets or sets outlineColor of the text to display
-    */
+     * Gets or sets outlineColor of the text to display
+     */
     @serialize()
     public get outlineColor(): string {
         return this._outlineColor;
     }
 
     /**
-    * Gets or sets outlineColor of the text to display
-    */
+     * Gets or sets outlineColor of the text to display
+     */
     public set outlineColor(value: string) {
         if (this._outlineColor === value) {
             return;
@@ -367,16 +368,16 @@ export class StructuredTextBlock extends Control {
     }
 
     /**
-    * Gets or sets frameColor of the text to display
-    */
+     * Gets or sets frameColor of the text to display
+     */
     @serialize()
     public get frameColor(): string {
         return this._frameColor;
     }
 
     /**
-    * Gets or sets frameColor of the text to display
-    */
+     * Gets or sets frameColor of the text to display
+     */
     public set frameColor(value: string) {
         if (this._frameColor === value) {
             return;
@@ -405,16 +406,16 @@ export class StructuredTextBlock extends Control {
     }
 
     /**
-    * Gets or sets frameOutlineColor of the text to display
-    */
+     * Gets or sets frameOutlineColor of the text to display
+     */
     @serialize()
     public get frameOutlineColor(): string {
         return this._frameOutlineColor;
     }
 
     /**
-    * Gets or sets frameOutlineColor of the text to display
-    */
+     * Gets or sets frameOutlineColor of the text to display
+     */
     public set frameOutlineColor(value: string) {
         if (this._frameOutlineColor === value) {
             return;
@@ -755,11 +756,13 @@ export class StructuredTextBlock extends Control {
             line.metrics.baselineY = y;
 
             for (let part of line.parts) {
-                part.dynamicCustomData = null;  // Always nullify it
-                part.metrics.x = x;
-                part.metrics.baselineY = y;
-
-                x += part.metrics.width;
+                delete part.dynamicCustomData;  // Always nullify it
+                // Note that it's always defined at that point
+                if (part.metrics) {
+                    part.metrics.x = x;
+                    part.metrics.baselineY = y;
+                    x += part.metrics.width;
+                }
                 this._characterCount += part.text.length;
             }
 
@@ -829,8 +832,6 @@ export class StructuredTextBlock extends Control {
                     let newPart = Object.assign({}, part);
                     newPart.text = character;
                     delete newPart.metrics;
-                    //const textMetrics = context.measureText(character);
-                    //newPart.metrics = new StructuredTextMetrics(textMetrics.width);
                     splitted.push(newPart);
                 }
 
@@ -927,7 +928,7 @@ export class StructuredTextBlock extends Control {
             ) {
                 lastInserted.text += part.text;
 
-                // Note that it's always defined at this point
+                // Note that it's always defined at that point
                 if (lastInserted.metrics && part.metrics) {
                     lastInserted.metrics.fuseWithRightPart(part.metrics);
                 }
@@ -954,7 +955,7 @@ export class StructuredTextBlock extends Control {
 
         for ( let part of structuredText) {
             if (! part.metrics) {
-                if (! contextSaved) { context.save() ; }
+                if (! contextSaved) { context.save(); }
 
                 const attr = this._inheritAttributes(part);
                 this._setContextAttributesForMeasure(context , attr);
@@ -1005,7 +1006,6 @@ export class StructuredTextBlock extends Control {
 
             if (testSize.width > width && testLine.length > 1) {
                 testLine.pop();
-                //lines.push( { parts: testLine , width: lastTestWidth } ) ;
                 lines.push({
                     parts: this._splitIntoCharacters(StructuredTextBlock._fuseStructuredTextParts(testLine), context),
                     metrics: new StructuredTextMetrics(lastTestSize.width, lastTestSize.height, lastTestSize.ascent, lastTestSize.descent)
@@ -1053,13 +1053,13 @@ export class StructuredTextBlock extends Control {
         }
     }
 
-    public _getTextPartAt(vector2: Vector2): any {
+    public getTextPartAt(x: number, y: number): undefined | IStructuredTextPart {
         this._computeXYOffset();
-        const x = vector2.x - this._xOffset;
-        const y = vector2.y - this._yOffset;
+        x -= this._xOffset;
+        y -= this._yOffset;
         const line = this._lines.find( _line => _line.metrics && y >= _line.metrics.baselineY - _line.metrics.ascent && y <= _line.metrics.baselineY + _line.metrics.descent);
         if (! line) { return; }
-        return line.parts.find( (part: any) => part.metrics && x >= part.metrics.x && x <= part.metrics.x + part.metrics.width);
+        return line.parts.find( part => part.metrics && x >= part.metrics.x && x <= part.metrics.x + part.metrics.width);
     }
 
     protected _renderLines(context: ICanvasRenderingContext): void {
@@ -1069,6 +1069,10 @@ export class StructuredTextBlock extends Control {
         for (let line of this._lines) {
             for (let part of line.parts) {
                 if (charCount >= this._characterLimit) { return; }
+
+                // Note that it's always defined at that point
+                if (!part.metrics) { continue; }
+
                 const attr = this._inheritAttributes(part);
 
                 if (charCount + part.text.length > this._characterLimit) {
