@@ -1,6 +1,7 @@
 import { Observable } from "babylonjs/Misc/observable";
 import { Measure } from "../measure";
 import { ValueAndUnit } from "../valueAndUnit";
+import { Vector2 } from "babylonjs/Maths/math.vector";
 import { Control } from "./control";
 import { TextWrapping } from "./textBlock";
 import { RegisterClass } from "babylonjs/Misc/typeStore";
@@ -80,6 +81,8 @@ export class StructuredTextBlock extends Control {
     private _lineThroughRelativeY: number = -0.3;
     private _decorationRelativeThickness: number = 0.08;
 
+    private _xOffset: number = 0;
+    private _yOffset: number = 0;
     private _scrollX: number = 0;
     private _scrollY: number = 0;
 
@@ -1034,39 +1037,46 @@ export class StructuredTextBlock extends Control {
         context.restore();
     }
 
-    protected _renderLines(context: ICanvasRenderingContext): void {
-        let charCount = 0;
-        let xOffset = this._currentMeasure.top + this._scrollY;
-        let yOffset = this._currentMeasure.left + this._scrollX;
+    protected _computeXYOffset(): void {
+        this._xOffset = this._currentMeasure.left + this._scrollX;
+        this._yOffset = this._currentMeasure.top + this._scrollY;
 
         switch (this._textVerticalAlignment) {
             // No offset, so nothing to do for top alignment
             //case Control.VERTICAL_ALIGNMENT_TOP:
             case Control.VERTICAL_ALIGNMENT_BOTTOM:
-                xOffset += this._currentMeasure.height - this._contentHeight;
+                this._yOffset += this._currentMeasure.height - this._contentHeight;
                 break;
             case Control.VERTICAL_ALIGNMENT_CENTER:
-                xOffset += (this._currentMeasure.height - this._contentHeight) / 2;
+                this._yOffset += (this._currentMeasure.height - this._contentHeight) / 2;
                 break;
         }
+    }
 
-        for (let i = 0; i < this._lines.length; i++) {
-            const line = this._lines[i];
+    public _getTextPartAt(vector2: Vector2): any {
+        this._computeXYOffset();
+        const x = vector2.x - this._xOffset;
+        const y = vector2.y - this._yOffset;
+        const line = this._lines.find( _line => _line.metrics && y >= _line.metrics.baselineY - _line.metrics.ascent && y <= _line.metrics.baselineY + _line.metrics.descent);
+        if (! line) { return; }
+        return line.parts.find( (part: any) => part.metrics && x >= part.metrics.x && x <= part.metrics.x + part.metrics.width);
+    }
 
+    protected _renderLines(context: ICanvasRenderingContext): void {
+        this._computeXYOffset();
+        let charCount = 0;
+
+        for (let line of this._lines) {
             for (let part of line.parts) {
                 if (charCount >= this._characterLimit) { return; }
-
-                // Keep Y inside the second loop, because each part can have is own Y even on the same line (e.g. allow subscript or superscript support in the future)
-                const y = xOffset + part.metrics.baselineY;
-                const x = yOffset + part.metrics.x;
                 const attr = this._inheritAttributes(part);
 
                 if (charCount + part.text.length > this._characterLimit) {
-                    this._drawText(part.text.slice(0, this._characterLimit - charCount), attr, x, y, -1 , part.metrics.height, context);
+                    this._drawText(part.text.slice(0, this._characterLimit - charCount), attr, this._xOffset + part.metrics.x, this._yOffset + part.metrics.baselineY, -1 , part.metrics.height, context);
                     return;
                 }
 
-                this._drawText(part.text, attr, x, y, part.metrics.width, part.metrics.height, context);
+                this._drawText(part.text, attr, this._xOffset + part.metrics.x, this._yOffset + part.metrics.baselineY, part.metrics.width, part.metrics.height, context);
                 charCount += part.text.length;
             }
         }
