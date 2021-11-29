@@ -104,7 +104,8 @@ export class StructuredTextBlock extends Control {
     private _lastMeasuredWidth: number = 0;
     private _linesAreDirty: boolean = true;
 
-    private _hasHoverEffect: boolean = false;
+    private _hasHoverStyle: boolean = false;
+    private _hoveringPart: null | IStructuredTextPart = null;
     private _hasHref: boolean = false;
 
     /**
@@ -121,6 +122,16 @@ export class StructuredTextBlock extends Control {
      * An event triggered when there is a part having an href clicked
      */
     public onClickHrefObservable = new Observable<HrefObservableData>();
+
+    /**
+     * An event triggered when the mouse enter a part having an href
+     */
+    public onEnterHrefObservable = new Observable<HrefObservableData>();
+
+    /**
+     * An event triggered when the mouse move out of a part having an href
+     */
+    public onOutHrefObservable = new Observable<HrefObservableData>();
 
     /**
      * Function used to split a string into words. By default, a string is split at each space character found
@@ -619,15 +630,21 @@ export class StructuredTextBlock extends Control {
 
     // Compute an attribute object from a text's part, inheriting from this
     private _inheritAttributes(part: IStructuredTextPart): TextPartAttributes {
+        const isHovering = this._hoveringPart === part;
+
         return {
-            color: part.color ?? this.color ,
+            color: isHovering && part.hover ? part.hover.color ?? part.color ?? this.color :
+                part.color ?? this.color ,
             outlineWidth: part.outlineWidth ?? this._outlineWidth ,
             outlineColor: part.outlineColor ?? this._outlineColor ,
             shadowColor: part.shadowColor ?? this.shadowColor ,
             shadowBlur: part.shadowBlur ?? this.shadowBlur ,
             shadowOffsetX: part.shadowOffsetX ?? this.shadowOffsetX ,
             shadowOffsetY: part.shadowOffsetY ?? this.shadowOffsetY ,
-            underline: part.underline ?? this._underline ,
+            underline: !! (
+                isHovering && part.hover ? part.hover.underline ?? part.underline ?? this._underline :
+                part.underline ?? this._underline
+            ) ,
             lineThrough: part.lineThrough ?? this._lineThrough ,
             frame: !! part.frame ,
             frameColor: part.frameColor ?? this._frameColor,
@@ -740,7 +757,8 @@ export class StructuredTextBlock extends Control {
         }
 
         this._characterCount = 0;
-        this._hasHoverEffect = false;
+        this._hoveringPart = null;
+        this._hasHoverStyle = false;
         this._hasHref = false;
         this._contentWidth = 0;
         this._contentHeight = 0;
@@ -773,7 +791,7 @@ export class StructuredTextBlock extends Control {
 
             for (let part of line.parts) {
                 delete part.dynamicCustomData;  // Always nullify it
-                if (part.hover) { this._hasHoverEffect = true; }
+                if (part.hover) { this._hasHoverStyle = true; }
                 if (part.href) { this._hasHref = true; }
 
                 // Note that it's always defined at that point
@@ -945,6 +963,10 @@ export class StructuredTextBlock extends Control {
                 && last.outlineWidth === part.outlineWidth && last.outlineColor === part.outlineColor
                 && last.shadowColor === part.shadowColor && last.shadowBlur === part.shadowBlur
                 && last.shadowOffsetX === part.shadowOffsetX && last.shadowOffsetY === part.shadowOffsetY
+                && last.hover?.color === part.hover?.color
+                && last.hover?.underline === part.hover?.underline
+                && last.href === part.href
+                && last.staticCustomData === part.staticCustomData
             ) {
                 lastInserted.text += part.text;
 
@@ -1174,33 +1196,49 @@ export class StructuredTextBlock extends Control {
     }
 
     /** @hidden */
-    public _onPointerDown_(target: Control, coordinates: Vector2, pointerId: number, buttonIndex: number, pi: PointerInfoBase): boolean {
-        console.warn("_onPointerDown() BF");
-        if (! this._hasHref) { return false; }
-        if (!super._onPointerDown(target, coordinates, pointerId, buttonIndex, pi)) {
-            return false;
-        }
-
-        const part = this.getTextPartAt(coordinates.x, coordinates.y);
-        if (! part || ! part.href) { return false; }
-
-        console.warn("_onPointerDown()", part, this._hasHoverEffect);
-        this.onClickHrefObservable.notifyObservers({target: this, href: part.href, part});
-
-        return true;
-    }
-
-    /** @hidden */
     public _onPointerUp(target: Control, coordinates: Vector2, pointerId: number, buttonIndex: number, notifyClick: boolean, pi?: PointerInfoBase): void {
-        console.warn("_onPointerUp() BF");
         if (! this._hasHref) { return; }
         super._onPointerUp(target, coordinates, pointerId, buttonIndex, notifyClick, pi);
 
         const part = this.getTextPartAt(coordinates.x, coordinates.y);
         if (! part || ! part.href) { return; }
 
-        console.warn("_onPointerUp()", part, this._hasHoverEffect);
         this.onClickHrefObservable.notifyObservers({target: this, href: part.href, part});
+    }
+
+    /** @hidden */
+    public _onPointerMove(target: Control, coordinates: Vector2, pointerId: number, pi: PointerInfoBase): void {
+        if (! this._hasHoverStyle && ! this._hasHref) {
+            this._updateHoveringPart(null);
+            return;
+        }
+
+        const part = this.getTextPartAt(coordinates.x, coordinates.y);
+        if (! part || (! part.hover && ! part.href)) {
+            this._updateHoveringPart(null);
+            return;
+        }
+
+        this._updateHoveringPart(part);
+    }
+
+    /** @hidden */
+    public _onPointerOut(target: Control, pi: Nullable<PointerInfoBase>, force = false): void {
+        this._updateHoveringPart(null);
+    }
+
+    /** @hidden */
+    private _updateHoveringPart(part: null | IStructuredTextPart) {
+        if (part !== this._hoveringPart) {
+            if (this._hoveringPart?.href) {
+                this.onOutHrefObservable.notifyObservers({target: this, href: this._hoveringPart.href, part: this._hoveringPart});
+            }
+            this._hoveringPart = part;
+            if (part?.href) {
+                this.onEnterHrefObservable.notifyObservers({target: this, href: part.href, part});
+            }
+            this._markAsDirty();
+        }
     }
 
     dispose(): void {

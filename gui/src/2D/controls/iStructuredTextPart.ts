@@ -28,8 +28,13 @@ export interface IStructuredTextPart {
     shadowOffsetX?: number;
     shadowOffsetY?: number;
 
-    // When set, change appearance of that part when the mouse is hovering it
-    hover?: boolean;
+    // When set, change appearance of that part when the mouse is hovering it.
+    // Only property that does not change the metrics should ever be supported here.
+    hover?: {
+        color?: string | ICanvasGradient;
+        underline?: boolean;
+    };
+
     // When set, call observers for a click event
     href?: any;
 
