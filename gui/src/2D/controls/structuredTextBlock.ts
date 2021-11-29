@@ -1,7 +1,8 @@
 import { Observable } from "babylonjs/Misc/observable";
 import { Measure } from "../measure";
 import { ValueAndUnit } from "../valueAndUnit";
-//import { Vector2 } from "babylonjs/Maths/math.vector";
+import { Vector2 } from "babylonjs/Maths/math.vector";
+import { PointerInfoBase } from 'babylonjs/Events/pointerEvents';
 import { Control } from "./control";
 import { TextWrapping } from "./textBlock";
 import { RegisterClass } from "babylonjs/Misc/typeStore";
@@ -56,6 +57,12 @@ type Size = {
     descent: number
 };
 
+type HrefObservableData = {
+    target: StructuredTextBlock,
+    href: any,
+    part: IStructuredTextPart
+};
+
 /**
  * Class used to create structured text block control
  */
@@ -97,15 +104,23 @@ export class StructuredTextBlock extends Control {
     private _lastMeasuredWidth: number = 0;
     private _linesAreDirty: boolean = true;
 
+    private _hasHoverEffect: boolean = false;
+    private _hasHref: boolean = false;
+
     /**
      * An event triggered after the text is changed
      */
     public onTextChangedObservable = new Observable<StructuredTextBlock>();
 
     /**
-     * An event triggered after the text was broken up into lines
+     * An event triggered after the text was broken up into lines and part have metrics computed
      */
     public onLinesReadyObservable = new Observable<StructuredTextBlock>();
+
+    /**
+     * An event triggered when there is a part having an href clicked
+     */
+    public onClickHrefObservable = new Observable<HrefObservableData>();
 
     /**
      * Function used to split a string into words. By default, a string is split at each space character found
@@ -552,7 +567,6 @@ export class StructuredTextBlock extends Control {
         structuredText: StructuredText = []
     ) {
         super(name);
-
         this.structuredText = structuredText;
     }
 
@@ -726,6 +740,8 @@ export class StructuredTextBlock extends Control {
         }
 
         this._characterCount = 0;
+        this._hasHoverEffect = false;
+        this._hasHref = false;
         this._contentWidth = 0;
         this._contentHeight = 0;
         let y = 0;
@@ -757,12 +773,16 @@ export class StructuredTextBlock extends Control {
 
             for (let part of line.parts) {
                 delete part.dynamicCustomData;  // Always nullify it
+                if (part.hover) { this._hasHoverEffect = true; }
+                if (part.href) { this._hasHref = true; }
+
                 // Note that it's always defined at that point
                 if (part.metrics) {
                     part.metrics.x = x;
                     part.metrics.baselineY = y;
                     x += part.metrics.width;
                 }
+
                 this._characterCount += part.text.length;
             }
 
@@ -1151,6 +1171,36 @@ export class StructuredTextBlock extends Control {
         }
 
         context.fill();
+    }
+
+    /** @hidden */
+    public _onPointerDown_(target: Control, coordinates: Vector2, pointerId: number, buttonIndex: number, pi: PointerInfoBase): boolean {
+        console.warn("_onPointerDown() BF");
+        if (! this._hasHref) { return false; }
+        if (!super._onPointerDown(target, coordinates, pointerId, buttonIndex, pi)) {
+            return false;
+        }
+
+        const part = this.getTextPartAt(coordinates.x, coordinates.y);
+        if (! part || ! part.href) { return false; }
+
+        console.warn("_onPointerDown()", part, this._hasHoverEffect);
+        this.onClickHrefObservable.notifyObservers({target: this, href: part.href, part});
+
+        return true;
+    }
+
+    /** @hidden */
+    public _onPointerUp(target: Control, coordinates: Vector2, pointerId: number, buttonIndex: number, notifyClick: boolean, pi?: PointerInfoBase): void {
+        console.warn("_onPointerUp() BF");
+        if (! this._hasHref) { return; }
+        super._onPointerUp(target, coordinates, pointerId, buttonIndex, notifyClick, pi);
+
+        const part = this.getTextPartAt(coordinates.x, coordinates.y);
+        if (! part || ! part.href) { return; }
+
+        console.warn("_onPointerUp()", part, this._hasHoverEffect);
+        this.onClickHrefObservable.notifyObservers({target: this, href: part.href, part});
     }
 
     dispose(): void {
