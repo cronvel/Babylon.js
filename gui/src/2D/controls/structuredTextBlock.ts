@@ -93,6 +93,7 @@ export class StructuredTextBlock extends Control {
     private _yOffset: number = 0;
     private _scrollX: number = 0;
     private _scrollY: number = 0;
+    private _scrollable: boolean = false;
 
     // Width and height of the actual content
     private _contentWidth: number = 0;
@@ -229,6 +230,7 @@ export class StructuredTextBlock extends Control {
     /**
      * Get the X-scrolling value
      */
+    @serialize()
     public get scrollX(): number {
         return this._scrollX;
     }
@@ -238,12 +240,14 @@ export class StructuredTextBlock extends Control {
      */
     public set scrollX(value: number) {
         this._scrollX = + value || 0;
+        this._scrollX = Math.min(Math.max(- this._contentWidth, this._scrollX), this._contentWidth);
         this._markAsDirty();
     }
 
     /**
      * Get the Y-scrolling value
      */
+    @serialize()
     public get scrollY(): number {
         return this._scrollY;
     }
@@ -253,7 +257,39 @@ export class StructuredTextBlock extends Control {
      */
     public set scrollY(value: number) {
         this._scrollY = + value || 0;
+
+        // Since scrollY is the delta with the base alignment, computing scroll bound also obey to this alignment
+        // We allow value that push the text content outside of the bound, but not further
+        // (to allow some effect where the content appears at the bottom, scroll, and disappear at the top)
+        switch (this._textVerticalAlignment) {
+            case Control.VERTICAL_ALIGNMENT_TOP:
+                this._scrollY = Math.min(Math.max(- this._contentHeight, this._scrollY), this._currentMeasure.height);
+                break;
+            case Control.VERTICAL_ALIGNMENT_BOTTOM:
+                this._scrollY = Math.min(Math.max(- this._currentMeasure.height, this._scrollY), this._contentHeight);
+                break;
+            case Control.VERTICAL_ALIGNMENT_CENTER:
+                let delta = (this._currentMeasure.height + this._contentHeight) / 2;
+                this._scrollY = Math.min(Math.max(- delta, this._scrollY), delta);
+                break;
+        }
+
         this._markAsDirty();
+    }
+
+    /**
+     * Get the X-scrolling value
+     */
+    @serialize()
+    public get scrollable(): boolean {
+        return this._scrollable;
+    }
+
+    /**
+     * Set the X-scrolling value
+     */
+    public set scrollable(value: boolean) {
+        this._scrollable = !! value;
     }
 
     /**
@@ -596,7 +632,7 @@ export class StructuredTextBlock extends Control {
     }
 
     // It's like ._applyStates(), but for each line parts
-    private _setContextAttributes(context: ICanvasRenderingContext, attr: TextPartAttributes) {
+    protected _setContextAttributes(context: ICanvasRenderingContext, attr: TextPartAttributes) {
         // .fillStyle and .strokeStyle can receive a CSS color string, a CanvasGradient or a CanvasPattern,
         // but here we just care about color string.
         context.fillStyle = attr.color;
@@ -624,12 +660,12 @@ export class StructuredTextBlock extends Control {
     }
 
     // Like ._setContextAttributesForMeasure(), but only set up attributes that cares for measuring the text
-    private _setContextAttributesForMeasure(context: ICanvasRenderingContext, attr: TextPartAttributes) {
+    protected _setContextAttributesForMeasure(context: ICanvasRenderingContext, attr: TextPartAttributes) {
         context.font = attr.fontStyle + " " + attr.fontWeight + " " + attr.fontSize + " " + attr.fontFamily ;
     }
 
     // Compute an attribute object from a text's part, inheriting from this
-    private _inheritAttributes(part: IStructuredTextPart): TextPartAttributes {
+    protected _inheritAttributes(part: IStructuredTextPart): TextPartAttributes {
         const isHovering = this._hoveringPart === part;
 
         return {
@@ -987,7 +1023,6 @@ export class StructuredTextBlock extends Control {
     }
 
     // Set the width of each parts and return the total width
-    // /!\ SHOULD RETURN height, ascent and descent too?
     protected _computeAllSizes(structuredText: StructuredText, context: ICanvasRenderingContext, size: Size = { width: 0, height: 0, ascent: 0, descent: 0 }): Size {
         let contextSaved = false;
         size.width = 0;
@@ -1070,15 +1105,6 @@ export class StructuredTextBlock extends Control {
         return lines;
     }
 
-    /** @hidden */
-    public _draw(context: ICanvasRenderingContext, invalidatedRectangle?: Nullable<Measure>): void {
-        context.save();
-        this._applyStates(context);
-        // Render lines
-        this._renderLines(context);
-        context.restore();
-    }
-
     protected _computeXYOffset(): void {
         this._xOffset = this._currentMeasure.left + this._scrollX;
         this._yOffset = this._currentMeasure.top + this._scrollY;
@@ -1102,6 +1128,15 @@ export class StructuredTextBlock extends Control {
         const line = this._lines.find( _line => _line.metrics && y >= _line.metrics.baselineY - _line.metrics.ascent && y <= _line.metrics.baselineY + _line.metrics.descent);
         if (! line) { return; }
         return line.parts.find( part => part.metrics && x >= part.metrics.x && x <= part.metrics.x + part.metrics.width);
+    }
+
+    /** @hidden */
+    public _draw(context: ICanvasRenderingContext, invalidatedRectangle?: Nullable<Measure>): void {
+        context.save();
+        this._applyStates(context);
+        // Render lines
+        this._renderLines(context);
+        context.restore();
     }
 
     protected _renderLines(context: ICanvasRenderingContext): void {
@@ -1170,7 +1205,7 @@ export class StructuredTextBlock extends Control {
         }
     }
 
-    private _drawFrame(attr: TextPartAttributes, x: number, y: number, width: number, height: number, context: ICanvasRenderingContext): void {
+    protected _drawFrame(attr: TextPartAttributes, x: number, y: number, width: number, height: number, context: ICanvasRenderingContext): void {
         context.fillStyle = attr.frameColor;
         const radius = attr.frameCornerRadius;
 
@@ -1197,7 +1232,7 @@ export class StructuredTextBlock extends Control {
 
     /** @hidden */
     public _onPointerUp(target: Control, coordinates: Vector2, pointerId: number, buttonIndex: number, notifyClick: boolean, pi?: PointerInfoBase): void {
-        if (! this._hasHref) { return; }
+        if (! this._isEnabled && ! this._hasHref) { return; }
         super._onPointerUp(target, coordinates, pointerId, buttonIndex, notifyClick, pi);
 
         const part = this.getTextPartAt(coordinates.x, coordinates.y);
@@ -1208,6 +1243,8 @@ export class StructuredTextBlock extends Control {
 
     /** @hidden */
     public _onPointerMove(target: Control, coordinates: Vector2, pointerId: number, pi: PointerInfoBase): void {
+        if (! this._isEnabled) { return; }
+
         if (! this._hasHoverStyle && ! this._hasHref) {
             this._updateHoveringPart(null);
             return;
@@ -1229,6 +1266,8 @@ export class StructuredTextBlock extends Control {
 
     /** @hidden */
     private _updateHoveringPart(part: null | IStructuredTextPart) {
+        if (! this._isEnabled) { return; }
+
         if (part !== this._hoveringPart) {
             if (this._hoveringPart?.href) {
                 this.onOutHrefObservable.notifyObservers({target: this, href: this._hoveringPart.href, part: this._hoveringPart});
@@ -1239,6 +1278,14 @@ export class StructuredTextBlock extends Control {
             }
             this._markAsDirty();
         }
+    }
+
+    /** @hidden */
+    public _onWheelScroll(deltaX?: number, deltaY?: number): void {
+        if (! this._isEnabled || ! this._scrollable) { return; }
+        console.warn("delta:",deltaX,deltaY);
+        if (deltaX) { this.scrollX -= Math.round(Math.sign(deltaX) * 0.125 * this._currentMeasure.width); }
+        if (deltaY) { this.scrollY -= Math.round(Math.sign(deltaY) * 0.125 * this._currentMeasure.height); }
     }
 
     dispose(): void {
