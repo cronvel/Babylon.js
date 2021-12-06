@@ -122,22 +122,26 @@ export class StructuredTextBlock extends Control {
     /**
      * An event triggered when there is a part having an href clicked
      */
-    public onClickHrefObservable = new Observable<HrefObservableData>();
+    public onLinkClickedObservable = new Observable<HrefObservableData>();
 
     /**
      * An event triggered when the mouse enter a part having an href
      */
-    public onEnterHrefObservable = new Observable<HrefObservableData>();
+    public onLinkEnteredObservable = new Observable<HrefObservableData>();
 
     /**
      * An event triggered when the mouse move out of a part having an href
      */
-    public onOutHrefObservable = new Observable<HrefObservableData>();
+    public onLinkExitedObservable = new Observable<HrefObservableData>();
 
     /**
      * Function used to split a string into words. By default, a string is split at each space character found
      */
     public wordSplittingFunction: Nullable<(line: string) => string[]>;
+
+    protected _markLinesAsDirty() {
+        this._linesAreDirty = true;
+    }
 
     /**
     * Gets or sets structured text to display
@@ -332,16 +336,13 @@ export class StructuredTextBlock extends Control {
         this._markAsDirty();
     }
 
-    protected _markLinesAsDirty() {
-        this._linesAreDirty = true;
-    }
-
     /**
      * Gets or sets line spacing value
      */
     @serialize()
     public set lineSpacing(value: string | number) {
         if (this._lineSpacing.fromString(value)) {
+            this._markLinesAsDirty();
             this._markAsDirty();
         }
     }
@@ -570,7 +571,8 @@ export class StructuredTextBlock extends Control {
         if (this._linesAreDirty) {
             let context = this._host?.getContext();
             if (! context) { return -1; }
-            this._computeLines(context);
+            // If the width is not defined yet (called before _processMeasure()), pretend it to be infinity (no linebreak)
+            this._computeLines(context, this._currentMeasure.width || Infinity);
         }
 
         return this._characterCount;
@@ -1237,7 +1239,7 @@ export class StructuredTextBlock extends Control {
         const part = this.getTextPartAt(coordinates.x, coordinates.y);
         if (! part || ! part.href) { return; }
 
-        this.onClickHrefObservable.notifyObservers({target: this, href: part.href, part});
+        this.onLinkClickedObservable.notifyObservers({target: this, href: part.href, part});
     }
 
     /** @hidden */
@@ -1269,11 +1271,11 @@ export class StructuredTextBlock extends Control {
 
         if (part !== this._hoveringPart) {
             if (this._hoveringPart?.href) {
-                this.onOutHrefObservable.notifyObservers({target: this, href: this._hoveringPart.href, part: this._hoveringPart});
+                this.onLinkExitedObservable.notifyObservers({target: this, href: this._hoveringPart.href, part: this._hoveringPart});
             }
             this._hoveringPart = part;
             if (part?.href) {
-                this.onEnterHrefObservable.notifyObservers({target: this, href: part.href, part});
+                this.onLinkEnteredObservable.notifyObservers({target: this, href: part.href, part});
             }
             this._markAsDirty();
         }
