@@ -1233,8 +1233,8 @@ export class StructuredTextBlock extends Control {
 
     /** @hidden */
     public _onPointerUp(target: Control, coordinates: Vector2, pointerId: number, buttonIndex: number, notifyClick: boolean, pi?: PointerInfoBase): void {
-        if (! this._isEnabled && ! this._hasHref) { return; }
         super._onPointerUp(target, coordinates, pointerId, buttonIndex, notifyClick, pi);
+        if (! this._isEnabled && ! this._hasHref) { return; }
 
         const part = this.getTextPartAt(coordinates.x, coordinates.y);
         if (! part || ! part.href) { return; }
@@ -1244,10 +1244,14 @@ export class StructuredTextBlock extends Control {
 
     /** @hidden */
     public _onPointerMove(target: Control, coordinates: Vector2, pointerId: number, pi: PointerInfoBase): void {
-        if (! this._isEnabled) { return; }
+        if (! this._isEnabled) {
+            super._onPointerMove(target, coordinates, pointerId, pi);
+            return;
+        }
 
         if (! this._hasHoverStyle && ! this._hasHref) {
             this._updateHoveringPart(null);
+            super._onPointerMove(target, coordinates, pointerId, pi);
             return;
         }
 
@@ -1263,6 +1267,7 @@ export class StructuredTextBlock extends Control {
     /** @hidden */
     public _onPointerOut(target: Control, pi: Nullable<PointerInfoBase>, force = false): void {
         this._updateHoveringPart(null);
+        super._onPointerOut(target, pi, force);
     }
 
     /** @hidden */
@@ -1283,7 +1288,11 @@ export class StructuredTextBlock extends Control {
 
     /** @hidden */
     public _onWheelScroll(deltaX?: number, deltaY?: number): void {
-        if (! this._isEnabled || ! this._scrollable) { return; }
+        if (! this._isEnabled || ! this._scrollable) {
+            super._onWheelScroll(deltaX, deltaY);
+            return;
+        }
+
         if (deltaX) { this.scrollX -= Math.round(Math.sign(deltaX) * 0.125 * this._currentMeasure.width); }
         if (deltaY) { this.scrollY -= Math.round(Math.sign(deltaY) * 0.125 * this._currentMeasure.height); }
     }
